@@ -55,10 +55,12 @@ footer button{flex:1}
 #заливка{height:100%;width:0;background:linear-gradient(90deg,#4f8cff,#33c48d);transition:width .2s}
 #журнал{position:fixed;left:12px;right:12px;bottom:104px;background:#0b0e13;border:1px solid var(--line);border-radius:11px;
  padding:10px;font-size:12px;color:var(--dim);max-height:130px;overflow:auto;display:none;z-index:6}
+.н-шаг{margin:7px 0;font-size:13px;line-height:1.45;color:#dfe6ef}
+.н-шаг a{display:inline-block;margin-left:6px;color:#7fb2ff;font-size:12px;text-decoration:underline}
 </style></head><body>
 
 <header>
-  <h1><span>ХРАНИЛИЩЕ <span style="font-size:11px;color:#8b97a8">v2.3</span> <span id="ключ-кнопка" style="font-size:12px;color:#7fb2ff;border:1px solid #2b3546;border-radius:8px;padding:1px 7px">🔑 ключ</span></span><span id="связь" style="font-size:11px;color:var(--dim)">проверяю…</span></h1>
+  <h1><span>ХРАНИЛИЩЕ <span style="font-size:11px;color:#8b97a8">v2.4</span> <span id="ключ-кнопка" style="font-size:12px;color:#7fb2ff;border:1px solid #2b3546;border-radius:8px;padding:1px 7px">🔑 ключ</span></span><span id="связь" style="font-size:11px;color:var(--dim)">проверяю…</span></h1>
   <div class="sub" id="счёт">загрузка…</div>
   <input id="поиск" type="search" placeholder="поиск: имя, тег…" autocomplete="off">
   <div class="row">
@@ -76,10 +78,17 @@ footer button{flex:1}
 <div id="настройка" style="display:none">
   <div class="н-тело">
     <h3>Один раз вписать ключ</h3>
-    <div class="н-т">Ключ нужен, чтобы складывать файлы в твой Telegram. Он сохранится только на этом телефоне и в странице его нет — украсть нечего.</div>
-    <div class="н-т">Возьми ключ у бота <b>@BotFather</b> → /mybots → твой бот → API Token. Вставь сюда:</div>
+    <div class="н-т">Ключ нужен, чтобы файлы уходили в твой Telegram. Он сохраняется только на этом телефоне, в странице его нет — украсть нечего.</div>
+    <div class="н-т" style="margin-top:10px"><b>Что нажать, по порядку:</b></div>
+    <div class="н-шаг"><b>1.</b> Открой Telegram и найди бота <b>@BotFather</b>
+      <a id="н-ботфазер" href="https://t.me/BotFather" target="_blank" rel="noopener">открыть @BotFather</a></div>
+    <div class="н-шаг"><b>2.</b> Напиши ему <b>/mybots</b> — он покажет список твоих ботов. Нажми на своего бота.</div>
+    <div class="н-шаг"><b>3.</b> Нажми кнопку <b>API Token</b>. Если вместо ключа написано, что он отозван — нажми <b>Revoke current token</b>, BotFather выдаст новый.</div>
+    <div class="н-шаг"><b>4.</b> Скопируй строку из цифр и букв — вид <b>123456789:AAH…</b></div>
+    <div class="н-шаг"><b>5.</b> Вернись сюда и нажми <b>«Вставить из буфера»</b>, затем <b>«Сохранить»</b>.</div>
     <input id="поле-токена" type="text" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="123456789:AAH…">
     <button class="p" id="сохранить-токен">Сохранить</button>
+    <button id="вставить-буфер">Вставить из буфера</button>
     <button id="позже">Позже</button>
     <div class="н-т" id="н-сейчас" style="color:#7fb2ff"></div>
     <div class="н-т" id="н-ошибка" style="color:var(--err)"></div>
@@ -1134,6 +1143,20 @@ function старт(){
       }
     };
     $("позже").onclick=спрятатьНастройку;
+    var кб=$("вставить-буфер");
+    if(кб)кб.onclick=function(){
+      var поле=$("поле-токена");
+      var отказ=function(){
+        поле.focus();
+        $("н-ошибка").textContent="Браузер не дал доступ к буферу — нажми на поле и вставь сам: долгое нажатие → «Вставить»";
+      };
+      if(!navigator.clipboard || !navigator.clipboard.readText)return отказ();
+      navigator.clipboard.readText().then(function(т){
+        т=String(т||"").trim();
+        if(!т)return отказ();
+        поле.value=т; $("н-ошибка").textContent="";
+      }).catch(отказ);
+    };
     var кк=$("ключ-кнопка");
     if(кк)кк.onclick=function(){показатьНастройку()};
     прочестьПапки();
