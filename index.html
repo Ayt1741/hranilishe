@@ -68,7 +68,7 @@ footer button{flex:1}
 </style></head><body>
 
 <header>
-  <h1><span>ХРАНИЛИЩЕ <span style="font-size:11px;color:#8b97a8">v2.5</span> <span id="ключ-кнопка" style="font-size:12px;color:#7fb2ff;border:1px solid #2b3546;border-radius:8px;padding:1px 7px">🔑 ключ</span></span><span id="связь" style="font-size:11px;color:var(--dim)">проверяю…</span></h1>
+  <h1><span>ХРАНИЛИЩЕ <span style="font-size:11px;color:#8b97a8">v2.6</span> <span id="ключ-кнопка" style="font-size:12px;color:#7fb2ff;border:1px solid #2b3546;border-radius:8px;padding:1px 7px">🔑 ключ</span></span><span id="связь" style="font-size:11px;color:var(--dim)">проверяю…</span></h1>
   <div class="sub" id="счёт">загрузка…</div>
   <input id="поиск" type="search" placeholder="поиск: имя, тег…" autocomplete="off">
   <div class="row">
@@ -522,10 +522,13 @@ function прочестьПапки(){
   try{var a=JSON.parse(localStorage.getItem("папки")||"[]");ПАПКИ=(a instanceof Array)?a:[]}catch(e){ПАПКИ=[]}
   try{var b=JSON.parse(localStorage.getItem("раскладка")||"{}");РАСКЛАДКА=(b&&typeof b==="object")?b:{}}catch(e){РАСКЛАДКА={}}
   try{var в=JSON.parse(localStorage.getItem("папки-время")||"0");ВРЕМЯ_РАСКЛАДКИ=+в||0}catch(e){ВРЕМЯ_РАСКЛАДКИ=0}
-  // старые ключи "имя|размер" переводим на короткие хэши
-  var новый={},к;
+  // ключи приводятся к одному виду: "имя|размер" -> хэш, короткий хэш -> 7 символов с нулями
+  var новый={},к,х;
   for(к in РАСКЛАДКА){
-    if(к.indexOf("|")>0){новый[crc32(к).toString(36)]=РАСКЛАДКА[к]}else{новый[к]=РАСКЛАДКА[к]}
+    if(к.indexOf("|")>0){х=crc32(к).toString(36)}
+    else{х=String(к)}
+    while(х.length<7)х="0"+х;
+    новый[х.slice(-7)]=РАСКЛАДКА[к];
   }
   РАСКЛАДКА=новый;
 }
@@ -731,6 +734,11 @@ function ключР(ф){
 }
 function папкаФайла(ф){
   var п=РАСКЛАДКА[ключР(ф)];
+  if(п===undefined){
+    var х=crc32((ф.и||"")+"|"+(ф.р||0)).toString(36);  // старый вид без нулей
+    п=РАСКЛАДКА[х];
+    if(п!==undefined){РАСКЛАДКА[ключР(ф)]=п}          // запоминаем в новом виде
+  }
   return (п===undefined)?(ф.п||""):п;
 }
 function счётВ(имя){var n=0,i;for(i=0;i<ВСЕ.length;i++){if(папкаФайла(ВСЕ[i])===имя)n++}return n}
