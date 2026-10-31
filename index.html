@@ -68,7 +68,7 @@ footer button{flex:1}
 </style></head><body>
 
 <header>
-  <h1><span>ХРАНИЛИЩЕ <span style="font-size:11px;color:#8b97a8">v3.1</span> <span id="ключ-кнопка" style="font-size:12px;color:#7fb2ff;border:1px solid #2b3546;border-radius:8px;padding:1px 7px">🔑 ключ</span></span><span id="связь" style="font-size:11px;color:var(--dim)">проверяю…</span></h1>
+  <h1><span>ХРАНИЛИЩЕ <span style="font-size:11px;color:#8b97a8">v3.2</span> <span id="ключ-кнопка" style="font-size:12px;color:#7fb2ff;border:1px solid #2b3546;border-radius:8px;padding:1px 7px">🔑 ключ</span></span><span id="связь" style="font-size:11px;color:var(--dim)">проверяю…</span></h1>
   <div class="sub" id="счёт">загрузка…</div>
   <input id="поиск" type="search" placeholder="поиск: имя, тег…" autocomplete="off">
   <div class="row">
@@ -737,6 +737,12 @@ function сохранитьВсёВТГ(){
     return false;
   });
 }
+function обновитьСтраховку() {
+  var вкл=false;
+  try{ вкл=localStorage.getItem("страховка-включена")==="1" }catch(e){}
+  if(!вкл || !ТОКЕН)return Promise.resolve(false);
+  return сохранитьВсёВТГ();
+}
 function сохранитьРаскладкуВТГ(){
   if(!ТОКЕН)return Promise.resolve(false);
   var куски=частиРаскладки();
@@ -765,6 +771,7 @@ function сохранитьРаскладкуВТГ(){
           try{localStorage.setItem("тг-главное",JSON.stringify({время:ВРЕМЯ_РАСКЛАДКИ,раскладка:иды,индекс:идыИ,оглавление:mid}))}catch(e){}
           ПОСЛЕДНЕЕ_В_ТГ=ВРЕМЯ_РАСКЛАДКИ;
           СТАТУС_ПАПОК="в ТГ сохранено ("+куски.length+" сообщ.)"; нарисоватьСтатусПапок();
+          try{ обновитьСтраховку() }catch(e){}
           return true;
         });
       });
@@ -1261,9 +1268,13 @@ function шторка(ф){
     закрытьШторку();
     показатьБаннер("отправляю страховку в Telegram…");
     сохранитьВсёВТГ().then(function(ок){
-      показатьБаннер(ок?"страховка в Telegram готова · файлов в списке: "+списокДляФайла().length+
-        " · папок: "+ПАПКИ.length:
+      var мои=списокДляФайла().length;
+      показатьБаннер(ок?
+        ("страховка в Telegram готова: отправлено "+мои+" записей о МОИХ файлах и "+ПАПКИ.length+
+         " папок. Встроенные 776 не отправляю — они уже внутри приложения, потеряться не могут. "+
+         "Саму страховку теперь обновляю сама после каждой загрузки."):
         "не вышло: Telegram не принял ключ или не отвечает — впиши ключ через 🔑 ключ");
+      if(ок){try{localStorage.setItem("страховка-включена","1")}catch(e){}}
     });
   }});
   тело.querySelectorAll("[data-из-страховки]").forEach(function(к){к.onclick=function(){
@@ -1323,7 +1334,8 @@ function нарисовать(){
   объединитьПамять();
   for(i=0;i<ВСЕ.length;i++){ф=ВСЕ[i];if(подходит(ф))найдено.push(i)}
   var моих=ВСЕ.length-встроенныхВСписке();
-  $("счёт").textContent="файлов: "+ВСЕ.length+" · моих: "+моих+" · показано: "+найдено.length;
+  $("счёт").textContent="всего "+ВСЕ.length+" = моих "+моих+" + встроенных "+встроенныхВСписке()+
+    " · на экране "+найдено.length;
   try{обновитьСчётчики()}catch(e){}
   if(!найдено.length){с.innerHTML='<div class="empty">ничего не найдено</div>';return}
   var до=Math.min(найдено.length,300);
