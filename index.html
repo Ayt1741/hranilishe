@@ -68,7 +68,7 @@ footer button{flex:1}
 </style></head><body>
 
 <header>
-  <h1><span>ХРАНИЛИЩЕ <span style="font-size:11px;color:#8b97a8">v2.9</span> <span id="ключ-кнопка" style="font-size:12px;color:#7fb2ff;border:1px solid #2b3546;border-radius:8px;padding:1px 7px">🔑 ключ</span></span><span id="связь" style="font-size:11px;color:var(--dim)">проверяю…</span></h1>
+  <h1><span>ХРАНИЛИЩЕ <span style="font-size:11px;color:#8b97a8">v3.0</span> <span id="ключ-кнопка" style="font-size:12px;color:#7fb2ff;border:1px solid #2b3546;border-radius:8px;padding:1px 7px">🔑 ключ</span></span><span id="связь" style="font-size:11px;color:var(--dim)">проверяю…</span></h1>
   <div class="sub" id="счёт">загрузка…</div>
   <input id="поиск" type="search" placeholder="поиск: имя, тег…" autocomplete="off">
   <div class="row">
@@ -120,6 +120,7 @@ footer button{flex:1}
 
 <div id="шторка"><div id="шторка-тело"></div></div>
 <input type="file" id="выбор-раскладки" accept=".json,application/json" style="display:none">
+<input type="file" id="выбор-списка" accept=".json,application/json" style="display:none">
 
 <main id="список"></main>
 <div id="журнал"></div>
@@ -652,6 +653,21 @@ function отложитьСохранениеВТГ(){
   if(ТАЙМЕР_ТГ)clearTimeout(ТАЙМЕР_ТГ);
   ТАЙМЕР_ТГ=setTimeout(сохранитьРаскладкуВТГ, 1500);
 }
+function частиИндекса(){
+  var з=загруженные(), к, строки=[], куски=[], текущий="";
+  for(к in з){
+    var ф=з[к];
+    if(!ф||!ф.и||!ф.f)continue;
+    строки.push(ф.и.replace(/[|\r\n]/g," ")+"|"+(ф.р||0)+"|"+ф.f+"|"+(ф.т||""));
+  }
+  for(var i=0;i<строки.length;i++){
+    if(текущий.length+строки[i].length+1>3800){куски.push(текущий);текущий=""}
+    текущий+=строки[i]+"\n";
+  }
+  if(текущий)куски.push(текущий);
+  if(!куски.length)куски.push("");
+  return куски;
+}
 function частиРаскладки(){
   var з=собратьЗаписиРаскладки(), куски=[], текущий="", i;
   for(i=0;i<з.length;i++){
@@ -670,43 +686,95 @@ function удалитьСтарыеЧасти(){
     return тг("deleteMessage",{chat_id:ЧАТ,message_id:ид}).catch(function(){});
   })).then(function(){try{localStorage.setItem("тг-части","[]")}catch(e){}});
 }
-function сохранитьРаскладкуВТГ(){
-  if(!ТОКЕН)return Promise.resolve(false);
-  var куски=частиРаскладки(), папки=ПАПКИ.slice(0,36).map(function(п){
-    return String(п).replace(/[;|\r\n]/g," ");
-  });
-  СТАТУС_ПАПОК="отправляю "+куски.length+" сообщ."; нарисоватьСтатусПапок();
+function отправитьЧасти(куски, отступ){
   var иды=[];
   function шлём(i){
-    if(i>=куски.length){
-      var оглавление="LAYOUT2|"+ВРЕМЯ_РАСКЛАДКИ+"|"+папки.join(";")+"|"+иды.join(",");
-      return тг("sendMessage",{chat_id:ЧАТ,text:оглавление,disable_notification:true,disable_web_page_preview:true})
-        .then(function(j){
-          if(!j||!j.ok)throw new Error("оглавление не ушло");
-          var mid=j.result.message_id;
-          return тг("pinChatMessage",{chat_id:ЧАТ,message_id:mid,disable_notification:true}).then(function(){
-            try{localStorage.setItem("тг-части",JSON.stringify(иды))}catch(e){}
-            ПОСЛЕДНЕЕ_В_ТГ=ВРЕМЯ_РАСКЛАДКИ;
-            СТАТУС_ПАПОК="в ТГ сохранено ("+куски.length+" сообщ.)"; нарисоватьСтатусПапок();
-            return true;
-          });
-        });
-    }
+    if(i>=куски.length)return Promise.resolve(иды);
     return тг("sendMessage",{chat_id:ЧАТ,text:куски[i]||"0",disable_notification:true,disable_web_page_preview:true})
       .then(function(j){
         if(!j||!j.ok)throw new Error("часть "+(i+1)+" не ушла");
         иды.push(j.result.message_id);
-        СТАТУС_ПАПОК="отправляю "+(i+1)+" из "+куски.length; нарисоватьСтатусПапок();
+        СТАТУС_ПАПОК="отправляю "+(i+1+(отступ||0))+" из "+(куски.length+(отступ||0)); нарисоватьСтатусПапок();
         return шлём(i+1);
       });
   }
-  return удалитьСтарыеЧасти().then(function(){return шлём(0)})
-    .catch(function(е){
-      СТАТУС_ПАПОК="в ТГ не ушло"; нарисоватьСтатусПапок();
-      лог("раскладка в ТГ не ушла: "+((е&&е.message)||е));
-      return false;
-    });
+  return шлём(0);
 }
+function удалитьМоиСообщения(иды){
+  if(!иды||!иды.length)return Promise.resolve();
+  return Promise.all(иды.map(function(ид){
+    return тг("deleteMessage",{chat_id:ЧАТ,message_id:ид}).catch(function(){});
+  }));
+}
+function сохранитьВсёВТГ(){
+  if(!ТОКЕН)return Promise.resolve(false);
+  var кускиР=частиРаскладки(), кускиИ=частиИндекса();
+  var старые=[];
+  try{ старые=(JSON.parse(localStorage.getItem("тг-главное")||"{}").все)||[] }catch(e){}
+  var идыР=[], идыИ=[];
+  СТАТУС_ПАПОК="страховка: сообщений "+кускиИ.length; нарисоватьСтатусПапок();
+  return отправитьЧасти(кускиР,0).then(function(и1){
+    идыР=и1;
+    return отправитьЧасти(кускиИ, кускиР.length);
+  }).then(function(и2){
+    идыИ=и2;
+    var огл="ГЛАВНОЕ1|"+ВРЕМЯ_РАСКЛАДКИ+"|"+идыР.join(",")+"|"+идыИ.join(",");
+    return тг("sendMessage",{chat_id:ЧАТ,text:огл,disable_notification:true,disable_web_page_preview:true});
+  }).then(function(j){
+    if(!j||!j.ok)throw new Error("оглавление не ушло");
+    var mid=j.result.message_id;
+    return тг("pinChatMessage",{chat_id:ЧАТ,message_id:mid,disable_notification:true}).then(function(){
+      var прежние=[];
+      try{ var г=JSON.parse(localStorage.getItem("тг-главное")||"{}"); прежние=(г.раскладка||[]).concat(г.индекс||[]) }catch(e){}
+      try{localStorage.setItem("тг-главное",JSON.stringify({время:ВРЕМЯ_РАСКЛАДКИ,раскладка:идыР,индекс:идыИ,оглавление:mid}))}catch(e){}
+      удалитьМоиСообщения(прежние);
+      СТАТУС_ПАПОК="страховка в ТГ: "+идыИ.length+" сообщ. с файлами"; нарисоватьСтатусПапок();
+      return true;
+    });
+  }).catch(function(е){
+    СТАТУС_ПАПОК="страховка не прошла"; нарисоватьСтатусПапок();
+    лог("страховка в ТГ не прошла: "+((е&&е.message)||е));
+    return false;
+  });
+}
+function сохранитьРаскладкуВТГ(){
+  if(!ТОКЕН)return Promise.resolve(false);
+  var куски=частиРаскладки();
+  // номера сообщений с индексом файлов берём из прошлой страховки — не теряем их
+  var идыИ=[];
+  try{ идыИ=(JSON.parse(localStorage.getItem("тг-главное")||"{}").индекс)||[] }catch(e){}
+  // если на этом устройстве списка файлов нет — не затираем чужую страховку, наследуем её номера
+  var наследовать = идыИ.length ? Promise.resolve(идыИ) :
+    тг("getChat",{chat_id:ЧАТ}).then(function(j){
+      var п=((j&&j.result)||{}).pinned_message||{};
+      var т=п.text||"";
+      if(т.indexOf("ГЛАВНОЕ1|")===0)return (т.split("|")[3]||"").split(",").filter(function(х){return х&&!isNaN(parseInt(х,10))});
+      return [];
+    }).catch(function(){return []});
+  СТАТУС_ПАПОК="отправляю "+куски.length+" сообщ."; нарисоватьСтатусПапок();
+  return наследовать.then(function(и){
+    идыИ=и||[];
+    return отправитьЧасти(куски,0);
+  }).then(function(иды){
+    var оглавление="ГЛАВНОЕ1|"+ВРЕМЯ_РАСКЛАДКИ+"|"+иды.join(",")+"|"+идыИ.join(",");
+    return тг("sendMessage",{chat_id:ЧАТ,text:оглавление,disable_notification:true,disable_web_page_preview:true})
+      .then(function(j){
+        if(!j||!j.ok)throw new Error("оглавление не ушло");
+        var mid=j.result.message_id;
+        return тг("pinChatMessage",{chat_id:ЧАТ,message_id:mid,disable_notification:true}).then(function(){
+          try{localStorage.setItem("тг-главное",JSON.stringify({время:ВРЕМЯ_РАСКЛАДКИ,раскладка:иды,индекс:идыИ,оглавление:mid}))}catch(e){}
+          ПОСЛЕДНЕЕ_В_ТГ=ВРЕМЯ_РАСКЛАДКИ;
+          СТАТУС_ПАПОК="в ТГ сохранено ("+куски.length+" сообщ.)"; нарисоватьСтатусПапок();
+          return true;
+        });
+      });
+  }).catch(function(е){
+    СТАТУС_ПАПОК="в ТГ не ушло"; нарисоватьСтатусПапок();
+    лог("раскладка в ТГ не ушла: "+((е&&е.message)||е));
+    return false;
+  });
+}
+
 function прочестьЧасть(ид){
   ид=parseInt(ид,10);
   if(!ид||isNaN(ид))return Promise.resolve("");
@@ -718,6 +786,48 @@ function прочестьЧасть(ид){
       тг("deleteMessage",{chat_id:ЧАТ,message_id:копия}).catch(function(){});
       return т;
     });
+}
+function разобратьИндекс(текст){
+  var строки=String(текст||"").split("\n"), добавлено=0, з=загруженные(), i, ч, ф;
+  for(i=0;i<строки.length;i++){
+    if(!строки[i]||строки[i].indexOf("|")<0)continue;
+    ч=строки[i].split("|");
+    if(ч.length<3||!ч[0]||!ч[2])continue;
+    ф={и:ч[0],р:parseInt(ч[1],10)||0,f:ч[2],ч:1,д:0,о:"телефон",т:ч[3]||""};
+    var ключ=ф.и+"|"+ф.р;
+    if(!з[ключ]){з[ключ]=ф;добавлено++}
+    else if(!з[ключ].f)з[ключ].f=ф.f;
+  }
+  try{localStorage.setItem("залито",JSON.stringify(з))}catch(e){}
+  ПАМЯТЬ_ЗАЛИТО=з;
+  return добавлено;
+}
+function взятьВсёИзТГ(){
+  if(!ТОКЕН)return Promise.resolve(false);
+  return тг("getChat",{chat_id:ЧАТ}).then(function(j){
+    if(!j||!j.ok)return false;
+    var п=(j.result||{}).pinned_message||{};
+    var т=п.text||"";
+    if(т.indexOf("ГЛАВНОЕ1|")!==0)return false;
+    var ч=т.split("|");
+    var идыР=(ч[2]||"").split(",").filter(function(х){return х&&!isNaN(parseInt(х,10))});
+    var идыИ=(ч[3]||"").split(",").filter(function(х){return х&&!isNaN(parseInt(х,10))});
+    var все=идыР.concat(идыИ);
+    if(!все.length)return false;
+    return Promise.all(все.map(прочестьЧасть)).then(function(тексты){
+      var текстыР=тексты.slice(0,идыР.length).join("");
+      var текстыИ=тексты.slice(идыР.length).join("");
+      var файлов=разобратьИндекс(текстыИ);
+      var папок=false;
+      if(текстыР && текстыР.indexOf("LAYOUT")===0){
+        папок=разобратьТекстРаскладки(текстыР.replace(/^LAYOUT\d\|/, "LAYOUT2|"), "");
+      }
+      объединитьПамять(); применитьПравила(); нарисоватьПапки(); нарисовать();
+      показатьБаннер("взято из Telegram: файлов добавлено "+файлов+" · всего "+ВСЕ.length+
+        " · папок "+(папок?ПАПКИ.length:"не найдено"));
+      return {файлов:файлов, папок:папок};
+    });
+  }).catch(function(){return false});
 }
 function взятьРаскладкуИзТГ(){
   if(!ТОКЕН)return Promise.resolve(false);
@@ -864,6 +974,48 @@ function применитьПравила(){
   if(сделано)сохранитьПапки(true);
   return сделано;
 }
+function списокДляФайла(){
+  var з=загруженные(), к, out=[], ф;
+  for(к in з){
+    ф=з[к];
+    if(!ф||!ф.и)continue;
+    out.push({и:ф.и,р:ф.р||0,д:ф.д||0,f:ф.f||"",ч:ф.ч||1,о:ф.о||"телефон",т:ф.т||"",п:ф.п||""});
+  }
+  return out;
+}
+function скачатьСписокВФайл(){
+  var данные={вид:"хранилище-список",версия:1,когда:Math.floor(Date.now()/1000),
+    папки:ПАПКИ,раскладка:РАСКЛАДКА,раскладкаПоИмени:РАСКЛАДКА_ИМЯ,файлы:списокДляФайла()};
+  var т=JSON.stringify(данные);
+  var имя="ХРАНИЛИЩЕ-список-"+new Date().toISOString().slice(0,10)+".json";
+  var ок=сохранитьБлоб(new Blob([т],{type:"application/json"}), имя);
+  показатьБаннер(ок?("список сохранён в файл: "+данные.файлы.length+" файлов, "+размер(т.length)+" · положи его в Telegram «Избранное»"):
+    "браузер не дал сохранить файл");
+  return ок;
+}
+function взятьСписокИзФайла(файл){
+  return файл.text().then(function(т){
+    var д=JSON.parse(т);
+    if(!д || !д.файлы)throw new Error("это не файл списка");
+    var з=загруженные(), добавить=0, i, ф, есть;
+    for(i=0;i<д.файлы.length;i++){
+      ф=д.файлы[i];
+      if(!ф||!ф.и)continue;
+      есть=false;
+      for(var к in з){ if(з[к].и===ф.и && Math.abs((з[к].р||0)-(ф.р||0))<2){есть=true;break} }
+      if(!есть){ з[ф.и+"|"+(ф.р||0)]=ф; добавить++ }
+    }
+    try{localStorage.setItem("залито",JSON.stringify(з))}catch(e){}
+    ПАМЯТЬ_ЗАЛИТО=з;
+    if(д.папки && д.папки.length){ for(i=0;i<д.папки.length;i++){ if(ПАПКИ.indexOf(д.папки[i])<0)ПАПКИ.push(д.папки[i]) } }
+    if(д.раскладка)for(var к2 in д.раскладка){ if(РАСКЛАДКА[к2]===undefined)РАСКЛАДКА[к2]=д.раскладка[к2] }
+    if(д.раскладкаПоИмени)for(var к3 in д.раскладкаПоИмени){ if(РАСКЛАДКА_ИМЯ[к3]===undefined)РАСКЛАДКА_ИМЯ[к3]=д.раскладкаПоИмени[к3] }
+    сохранитьПапки(true); объединитьПамять(); применитьПравила();
+    нарисоватьПапки(); нарисовать();
+    показатьБаннер("взято из файла: добавлено "+добавить+" файлов · всего в списке "+ВСЕ.length+" · моих "+(ВСЕ.length-776));
+    return добавить;
+  }).catch(function(е){показатьБаннер("не смог прочитать файл списка: "+((е&&е.message)||е));return 0});
+}
 function перенестиВсёВ(имя, толькоФото){
   имя=(имя||"").trim();
   if(!имя)return {перенесено:0, осталось:счётВ("")};
@@ -970,14 +1122,19 @@ function шторка(ф){
     }
     html.push('<button class="p" data-починить="1">🔧 починить привязку папок</button>');
     html.push('<button data-цифры="1">📊 что лежит в памяти (цифры)</button>');
-    html.push('<button class="p" data-втг="1">сохранить папки в Telegram (страховка)</button>');
-    html.push('<button data-изтг="1">взять папки из Telegram</button>');
+    html.push('<button class="p" data-страховка="1">🔐 страховка: папки + список файлов в Telegram</button>');
+    html.push('<button data-из-страховки="1">⬇ взять папки и файлы из Telegram</button>');
+    html.push('<button data-втг="1">сохранить только папки в Telegram</button>');
+    html.push('<button data-изтг="1">взять только папки из Telegram</button>');
     html.push('<button data-ключ="1">вписать ключ бота заново</button>');
     html.push('<button data-связь="1">проверить связь с Телеграмом</button>');
     html.push('<button class="p" data-очередь="1">отправить очередь в Телеграм сейчас</button>');
     html.push('<button data-скачать-очередь="1">скачать файлы из очереди на телефон</button>');
-    html.push('<button data-экспорт="1">сохранить раскладку в файл</button>');
-    html.push('<button data-импорт="1">загрузить раскладку из файла</button>');
+    html.push('<div class="подсказка" style="margin-top:12px"><b>список моих файлов (страховка)</b> — чтобы не терялся при чистке браузера</div>');
+    html.push('<button class="p" data-список-файл="1">💾 сохранить список файлов в файл</button>');
+    html.push('<button data-список-из-файла="1">📥 взять список из файла</button>');
+    html.push('<button data-экспорт="1">сохранить только папки в файл</button>');
+    html.push('<button data-импорт="1">взять только папки из файла</button>');
     html.push('<button data-закрыть="1">закрыть</button>');
   }
   тело.innerHTML=html.join("");
@@ -1000,6 +1157,13 @@ function шторка(ф){
     закрытьШторку(); нарисоватьПапки(); нарисовать();
     показатьБаннер("разложено по типам: "+n+" файлов, папок: "+ПАПКИ.length);
     setTimeout(function(){var б=$("баннер");if(б)б.style.display="none"},4000);
+  }});
+  тело.querySelectorAll("[data-список-файл]").forEach(function(к){к.onclick=function(){
+    закрытьШторку(); скачатьСписокВФайл();
+  }});
+  тело.querySelectorAll("[data-список-из-файла]").forEach(function(к){к.onclick=function(){
+    закрытьШторку();
+    var в=$("выбор-списка"); в.value=""; в.click();
   }});
   тело.querySelectorAll("[data-экспорт]").forEach(function(к){к.onclick=function(){
     var т=JSON.stringify({папки:ПАПКИ,раскладка:РАСКЛАДКА},null,1);
@@ -1093,6 +1257,22 @@ function шторка(ф){
       " · без папки "+ц.безПапки+" · память телефона "+ц.памятьКБ+" КБ");
     setTimeout(function(){var б=$("баннер");if(б)б.style.display="none"},10000);
   }});
+  тело.querySelectorAll("[data-страховка]").forEach(function(к){к.onclick=function(){
+    закрытьШторку();
+    показатьБаннер("отправляю страховку в Telegram…");
+    сохранитьВсёВТГ().then(function(ок){
+      показатьБаннер(ок?"страховка в Telegram готова · файлов в списке: "+списокДляФайла().length+
+        " · папок: "+ПАПКИ.length:
+        "не вышло: Telegram не принял ключ или не отвечает — впиши ключ через 🔑 ключ");
+    });
+  }});
+  тело.querySelectorAll("[data-из-страховки]").forEach(function(к){к.onclick=function(){
+    закрытьШторку();
+    показатьБаннер("читаю из Telegram…");
+    взятьВсёИзТГ().then(function(р){
+      if(!р)показатьБаннер("в закреплённом сообщении нет страховки — сначала нажми «страховка» на телефоне, где список цел");
+    });
+  }});
   тело.querySelectorAll("[data-изтг]").forEach(function(к){к.onclick=function(){
     взятьРаскладкуИзТГ().then(function(ок){
       показатьБаннер(ок?"папки взяты из Telegram":"в Telegram нет сохранённых папок");
@@ -1133,7 +1313,9 @@ function нарисовать(){
   var с=$("список"), найдено=[], i, ф, html=[];
   объединитьПамять();
   for(i=0;i<ВСЕ.length;i++){ф=ВСЕ[i];if(подходит(ф))найдено.push(i)}
-  $("счёт").textContent="файлов: "+ВСЕ.length+" · показано: "+найдено.length;
+  var моих=0, i2;
+  for(i2=0;i2<ВСЕ.length;i2++){ if(ВСЕ[i2].о && ВСЕ[i2].о!=="склад")моих++ }
+  $("счёт").textContent="файлов: "+ВСЕ.length+" · моих: "+моих+" · показано: "+найдено.length;
   try{обновитьСчётчики()}catch(e){}
   if(!найдено.length){с.innerHTML='<div class="empty">ничего не найдено</div>';return}
   var до=Math.min(найдено.length,300);
@@ -1708,6 +1890,10 @@ function старт(){
     $("фото").onclick=function(){$("выбор2").value="";$("выбор2").click()};
     $("файлы").onclick=function(){$("выбор").value="";$("выбор").click()};
     $("выбор2").onchange=function(e){запуститьФайлы(Array.prototype.slice.call(e.target.files))};
+    $("выбор-списка").onchange=function(e){
+      var ф=e.target.files && e.target.files[0];
+      if(ф)взятьСписокИзФайла(ф);
+    };
     $("выбор").onchange=function(e){запуститьФайлы(Array.prototype.slice.call(e.target.files))};
   }catch(e){показатьБаннер("ошибка запуска: "+e.message)}
 }
@@ -1719,7 +1905,7 @@ window.ХРАНИЛИЩЕ={папки:function(){return ПАПКИ},раскла
   статус:function(){return СТАТУС_ПАПОК},время:function(){return ВРЕМЯ_РАСКЛАДКИ},
   место:function(){return МЕСТО},состояниеТГ:function(){return СОСТОЯНИЕ_ТГ},
   проверитьМесто:выбратьМесто,очередь:очередьВсе,вОчередь:вОчередь,
-  запомнить:запомнить,перенестиВсёВ:перенестиВсёВ,правила:применитьПравила,папкаПоПравилу:папкаПоПравилу,починить:починитьПапки,цифры:цифрыПамяти,счётВ:счётВ,разложить:разложитьПоТипам,собратьZip:собратьZip,скачатьНабор:скачатьНабор,выбранные:function(){return выбранные},включитьВыбор:включитьВыбор,режим:function(){return режимВыбора},выбранныеФайлы:выбранныеФайлы,
+  запомнить:запомнить,перенестиВсёВ:перенестиВсёВ,правила:применитьПравила,папкаПоПравилу:папкаПоПравилу,починить:починитьПапки,цифры:цифрыПамяти,страховка:сохранитьВсёВТГ,изСтраховки:взятьВсёИзТГ,список:списокДляФайла,счётВ:счётВ,разложить:разложитьПоТипам,собратьZip:собратьZip,скачатьНабор:скачатьНабор,выбранные:function(){return выбранные},включитьВыбор:включитьВыбор,режим:function(){return режимВыбора},выбранныеФайлы:выбранныеФайлы,
   отправитьОчередь:отправитьОчередь,прочестьЧасть:прочестьЧасть,сохранитьВТГ:сохранитьРаскладкуВТГ,разобрать:разобратьТекстРаскладки,собрать:собратьТекстРаскладки,очередьУдалить:очередьУдалить,сохранитьТокен:сохранитьТокен,естьТокен:function(){return !!ТОКЕН},объединить:объединитьПамять};
 if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",старт)}else{старт()}
 setTimeout(function(){
