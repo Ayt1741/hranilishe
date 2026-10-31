@@ -68,7 +68,7 @@ footer button{flex:1}
 </style></head><body>
 
 <header>
-  <h1><span>ХРАНИЛИЩЕ <span style="font-size:11px;color:#8b97a8">v3.0</span> <span id="ключ-кнопка" style="font-size:12px;color:#7fb2ff;border:1px solid #2b3546;border-radius:8px;padding:1px 7px">🔑 ключ</span></span><span id="связь" style="font-size:11px;color:var(--dim)">проверяю…</span></h1>
+  <h1><span>ХРАНИЛИЩЕ <span style="font-size:11px;color:#8b97a8">v3.1</span> <span id="ключ-кнопка" style="font-size:12px;color:#7fb2ff;border:1px solid #2b3546;border-radius:8px;padding:1px 7px">🔑 ключ</span></span><span id="связь" style="font-size:11px;color:var(--dim)">проверяю…</span></h1>
   <div class="sub" id="счёт">загрузка…</div>
   <input id="поиск" type="search" placeholder="поиск: имя, тег…" autocomplete="off">
   <div class="row">
@@ -1298,6 +1298,15 @@ function загрузитьРаскладкуИзФайла(файл){
 }
 
 /* ---------- показ списка ---------- */
+function встроенныхВСписке(){
+  var в=(window.ВСТРОЕННЫЙ&&window.ВСТРОЕННЫЙ.файлы)||[], есть=0, i, j, ф;
+  for(i=0;i<в.length;i++){
+    for(j=0;j<ВСЕ.length;j++){
+      if(ВСЕ[j].и===в[i].и && Math.abs((ВСЕ[j].р||0)-(в[i].р||0))<2){есть++;break}
+    }
+  }
+  return есть;
+}
 function подходит(ф){
   var q=($("поиск").value||"").trim().toLowerCase();
   if(активПапка===БЕЗ){ if(папкаФайла(ф)!=="")return false }
@@ -1313,8 +1322,7 @@ function нарисовать(){
   var с=$("список"), найдено=[], i, ф, html=[];
   объединитьПамять();
   for(i=0;i<ВСЕ.length;i++){ф=ВСЕ[i];if(подходит(ф))найдено.push(i)}
-  var моих=0, i2;
-  for(i2=0;i2<ВСЕ.length;i2++){ if(ВСЕ[i2].о && ВСЕ[i2].о!=="склад")моих++ }
+  var моих=ВСЕ.length-встроенныхВСписке();
   $("счёт").textContent="файлов: "+ВСЕ.length+" · моих: "+моих+" · показано: "+найдено.length;
   try{обновитьСчётчики()}catch(e){}
   if(!найдено.length){с.innerHTML='<div class="empty">ничего не найдено</div>';return}
