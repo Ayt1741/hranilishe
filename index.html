@@ -58,7 +58,7 @@ footer button{flex:1}
 </style></head><body>
 
 <header>
-  <h1><span>ХРАНИЛИЩЕ <span style="font-size:11px;color:#8b97a8">v2.2</span> <span id="ключ-кнопка" style="font-size:12px;color:#7fb2ff;border:1px solid #2b3546;border-radius:8px;padding:1px 7px">🔑 ключ</span></span><span id="связь" style="font-size:11px;color:var(--dim)">проверяю…</span></h1>
+  <h1><span>ХРАНИЛИЩЕ <span style="font-size:11px;color:#8b97a8">v2.3</span> <span id="ключ-кнопка" style="font-size:12px;color:#7fb2ff;border:1px solid #2b3546;border-radius:8px;padding:1px 7px">🔑 ключ</span></span><span id="связь" style="font-size:11px;color:var(--dim)">проверяю…</span></h1>
   <div class="sub" id="счёт">загрузка…</div>
   <input id="поиск" type="search" placeholder="поиск: имя, тег…" autocomplete="off">
   <div class="row">
@@ -512,31 +512,63 @@ function сохранитьПапки(безТг){
 }
 
 /* ---------- раскладка живёт в Telegram (закреплённое сообщение) ---------- */
-function собратьТекстРаскладки(){
-  var пары=[],к,имя;
+function записьФайла(к, идПапки){
+  var х=crc32(к).toString(36);
+  while(х.length<7)х="0"+х;
+  return идПапки.toString(36).slice(-1)+х.slice(-7);
+}
+function собратьЗаписиРаскладки(){
+  var записи=[],к,имя;
   for(к in РАСКЛАДКА){
     имя=РАСКЛАДКА[к];
     if(!имя)continue;
     var ид=ПАПКИ.indexOf(имя);
     if(ид<0)continue;
-    пары.push(к+":"+ид.toString(36));
+    if(ид>35)continue;
+    записи.push({папка:ид,запись:записьФайла(к,ид)});
   }
-  var чистые=ПАПКИ.map(function(п){return String(п).replace(/[;|\r\n]/g," ")});
-  return "LAYOUT1|"+ВРЕМЯ_РАСКЛАДКИ+"|"+чистые.join(";")+"|"+пары.join(",");
+  return записи;
 }
-function разобратьТекстРаскладки(т){
-  if(!т || т.indexOf("LAYOUT1|")!==0)return false;
-  var ч=т.split("|");
-  if(ч.length<3)return false;
-  var время=+ч[1]||0;
-  var папки=(ч[2]||"").split(";").filter(function(п){return п.length>0});
-  var пары=(ч[3]||"").split(","), i, п, ид, новая={};
-  for(i=0;i<пары.length;i++){
-    п=пары[i].split(":");
-    if(п.length!==2)continue;
-    ид=parseInt(п[1],36);
+function собратьТекстРаскладки(){
+  var з=собратьЗаписиРаскладки(), куски=[];
+  for(var i=0;i<з.length;i++)куски.push(з[i].запись);
+  var чистые=ПАПКИ.slice(0,36).map(function(п){return String(п).replace(/[;|\r\n]/g," ")});
+  return "LAYOUT1|"+ВРЕМЯ_РАСКЛАДКИ+"|"+чистые.join(";")+"|"+куски.join("");
+}
+function разобратьТекстРаскладки(т, записиДоп){
+  if(!т)return false;
+  var ч, время=0, папки=[], строки="", i, новая={};
+  if(т.indexOf("LAYOUT1|")===0){
+    ч=т.split("|");
+    if(ч.length<3)return false;
+    время=+ч[1]||0;
+    папки=(ч[2]||"").split(";").filter(function(п){return п.length>0});
+    строки=(ч[3]||"");
+    var пары=строки.indexOf(":")>=0 ? строки.split(",") : [];
+    if(пары.length){
+      for(i=0;i<пары.length;i++){
+        var п=пары[i].split(":"), ид=parseInt(п[1],36);
+        if(п.length!==2||isNaN(ид)||!папки[ид])continue;
+        новая[п[0]]=папки[ид];
+      }
+    } else {
+      строки=(строки||"").replace(/[^0-9a-z]/gi,"");
+    }
+  } else if(т.indexOf("LAYOUT2|")===0){
+    ч=т.split("|");
+    if(ч.length<3)return false;
+    время=+ч[1]||0;
+    папки=(ч[2]||"").split(";").filter(function(п){return п.length>0});
+    строки=(записиДоп||"");
+  } else return false;
+  // разбор коротких записей: 1 символ папки + 7 символов хэша
+  var чётко=строки.replace(/[^0-9a-z]/gi,""), ж;
+  for(ж=0;ж+8<=чётко.length;ж+=8){
+    var блок=чётко.substr(ж,8);
+    var ид=parseInt(блок.charAt(0),36);
+    var хэш=блок.substr(1);
     if(isNaN(ид)||!папки[ид])continue;
-    новая[п[0]]=папки[ид];
+    новая[хэш]=папки[ид];
   }
   ПАПКИ=папки; РАСКЛАДКА=новая; ВРЕМЯ_РАСКЛАДКИ=время; ПОСЛЕДНЕЕ_В_ТГ=время;
   СТАТУС_ПАПОК="в ТГ сохранено";
@@ -552,29 +584,90 @@ function отложитьСохранениеВТГ(){
   if(ТАЙМЕР_ТГ)clearTimeout(ТАЙМЕР_ТГ);
   ТАЙМЕР_ТГ=setTimeout(сохранитьРаскладкуВТГ, 1500);
 }
+function частиРаскладки(){
+  var з=собратьЗаписиРаскладки(), куски=[], текущий="", i;
+  for(i=0;i<з.length;i++){
+    if(текущий.length+8>3800){куски.push(текущий);текущий=""}
+    текущий+=з[i].запись;
+  }
+  if(текущий)куски.push(текущий);
+  if(!куски.length)куски.push("");
+  return куски;
+}
+function удалитьСтарыеЧасти(){
+  var старые=[];
+  try{старые=JSON.parse(localStorage.getItem("тг-части")||"[]")}catch(e){старые=[]}
+  if(!старые.length)return Promise.resolve();
+  return Promise.all(старые.map(function(ид){
+    return тг("deleteMessage",{chat_id:ЧАТ,message_id:ид}).catch(function(){});
+  })).then(function(){try{localStorage.setItem("тг-части","[]")}catch(e){}});
+}
 function сохранитьРаскладкуВТГ(){
-  var т=собратьТекстРаскладки();
-  if(т.length>3900){СТАТУС_ПАПОК="слишком много, не влезло в ТГ";нарисоватьСтатусПапок();return Promise.resolve(false)}
-  return тг("sendMessage",{chat_id:ЧАТ,text:т,disable_notification:true,disable_web_page_preview:true})
-    .then(function(j){
-      if(!j||!j.ok){СТАТУС_ПАПОК="в ТГ не ушло";нарисоватьСтатусПапок();return false}
-      var mid=j.result.message_id;
-      return тг("pinChatMessage",{chat_id:ЧАТ,message_id:mid,disable_notification:true}).then(function(){
-        ПОСЛЕДНЕЕ_В_ТГ=ВРЕМЯ_РАСКЛАДКИ;
-        СТАТУС_ПАПОК="в ТГ сохранено"; нарисоватьСтатусПапок();
-        if(window.__предТГ && window.__предТГ!==mid){
-          тг("deleteMessage",{chat_id:ЧАТ,message_id:window.__предТГ});
-        }
-        window.__предТГ=mid;
-        return true;
+  if(!ТОКЕН)return Promise.resolve(false);
+  var куски=частиРаскладки(), папки=ПАПКИ.slice(0,36).map(function(п){
+    return String(п).replace(/[;|\r\n]/g," ");
+  });
+  СТАТУС_ПАПОК="отправляю "+куски.length+" сообщ."; нарисоватьСтатусПапок();
+  var иды=[];
+  function шлём(i){
+    if(i>=куски.length){
+      var оглавление="LAYOUT2|"+ВРЕМЯ_РАСКЛАДКИ+"|"+папки.join(";")+"|"+иды.join(",");
+      return тг("sendMessage",{chat_id:ЧАТ,text:оглавление,disable_notification:true,disable_web_page_preview:true})
+        .then(function(j){
+          if(!j||!j.ok)throw new Error("оглавление не ушло");
+          var mid=j.result.message_id;
+          return тг("pinChatMessage",{chat_id:ЧАТ,message_id:mid,disable_notification:true}).then(function(){
+            try{localStorage.setItem("тг-части",JSON.stringify(иды))}catch(e){}
+            ПОСЛЕДНЕЕ_В_ТГ=ВРЕМЯ_РАСКЛАДКИ;
+            СТАТУС_ПАПОК="в ТГ сохранено ("+куски.length+" сообщ.)"; нарисоватьСтатусПапок();
+            return true;
+          });
+        });
+    }
+    return тг("sendMessage",{chat_id:ЧАТ,text:куски[i]||"0",disable_notification:true,disable_web_page_preview:true})
+      .then(function(j){
+        if(!j||!j.ok)throw new Error("часть "+(i+1)+" не ушла");
+        иды.push(j.result.message_id);
+        СТАТУС_ПАПОК="отправляю "+(i+1)+" из "+куски.length; нарисоватьСтатусПапок();
+        return шлём(i+1);
       });
-    }).catch(function(){СТАТУС_ПАПОК="ТГ не ответил";нарисоватьСтатусПапок();return false});
+  }
+  return удалитьСтарыеЧасти().then(function(){return шлём(0)})
+    .catch(function(е){
+      СТАТУС_ПАПОК="в ТГ не ушло"; нарисоватьСтатусПапок();
+      лог("раскладка в ТГ не ушла: "+((е&&е.message)||е));
+      return false;
+    });
+}
+function прочестьЧасть(ид){
+  ид=parseInt(ид,10);
+  if(!ид||isNaN(ид))return Promise.resolve("");
+  return тг("forwardMessage",{chat_id:ЧАТ,from_chat_id:ЧАТ,message_id:ид,disable_notification:true})
+    .then(function(j){
+      if(!j||!j.ok)return "";
+      var копия=j.result.message_id;
+      var т=j.result.text||"";
+      тг("deleteMessage",{chat_id:ЧАТ,message_id:копия}).catch(function(){});
+      return т;
+    });
 }
 function взятьРаскладкуИзТГ(){
+  if(!ТОКЕН)return Promise.resolve(false);
   return тг("getChat",{chat_id:ЧАТ}).then(function(j){
     if(!j||!j.ok)return false;
     var п=(j.result||{}).pinned_message||{};
     var т=п.text||"";
+    if(т.indexOf("LAYOUT2|")===0){
+      var ч=т.split("|");
+      var иды=(ч[3]||"").split(",").map(function(х){return parseInt(х,10)}).filter(function(х){return !isNaN(х)&&х>0});
+      if(!иды.length)return false;
+      return Promise.all(иды.map(прочестьЧасть)).then(function(тексты){
+        var всё=тексты.join("");
+        if(!разобратьТекстРаскладки(т, всё))return false;
+        нарисоватьПапки(); нарисовать(); нарисоватьСтатусПапок();
+        return true;
+      });
+    }
     if(!разобратьТекстРаскладки(т))return false;
     нарисоватьПапки(); нарисовать(); нарисоватьСтатусПапок();
     return true;
@@ -594,7 +687,11 @@ function crc32(т){
   }
   return (с>>>0);
 }
-function ключР(ф){return crc32((ф.и||"")+"|"+(ф.р||0)).toString(36)}
+function ключР(ф){
+  var х=crc32((ф.и||"")+"|"+(ф.р||0)).toString(36);
+  while(х.length<7)х="0"+х;
+  return х.slice(-7);
+}
 function папкаФайла(ф){
   var п=РАСКЛАДКА[ключР(ф)];
   return (п===undefined)?(ф.п||""):п;
@@ -1080,7 +1177,7 @@ window.ХРАНИЛИЩЕ={папки:function(){return ПАПКИ},раскла
   статус:function(){return СТАТУС_ПАПОК},время:function(){return ВРЕМЯ_РАСКЛАДКИ},
   место:function(){return МЕСТО},состояниеТГ:function(){return СОСТОЯНИЕ_ТГ},
   проверитьМесто:выбратьМесто,очередь:очередьВсе,вОчередь:вОчередь,
-  отправитьОчередь:отправитьОчередь,очередьУдалить:очередьУдалить,сохранитьТокен:сохранитьТокен,естьТокен:function(){return !!ТОКЕН},объединить:объединитьПамять};
+  отправитьОчередь:отправитьОчередь,прочестьЧасть:прочестьЧасть,сохранитьВТГ:сохранитьРаскладкуВТГ,разобрать:разобратьТекстРаскладки,собрать:собратьТекстРаскладки,очередьУдалить:очередьУдалить,сохранитьТокен:сохранитьТокен,естьТокен:function(){return !!ТОКЕН},объединить:объединитьПамять};
 if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",старт)}else{старт()}
 setTimeout(function(){
   if($("счёт").textContent==="загрузка…"){
