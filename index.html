@@ -58,7 +58,7 @@ footer button{flex:1}
 </style></head><body>
 
 <header>
-  <h1><span>ХРАНИЛИЩЕ <span style="font-size:11px;color:#8b97a8">v2.0</span></span><span id="связь" style="font-size:11px;color:var(--dim)">проверяю…</span></h1>
+  <h1><span>ХРАНИЛИЩЕ <span style="font-size:11px;color:#8b97a8">v2.1</span></span><span id="связь" style="font-size:11px;color:var(--dim)">проверяю…</span></h1>
   <div class="sub" id="счёт">загрузка…</div>
   <input id="поиск" type="search" placeholder="поиск: имя, тег…" autocomplete="off">
   <div class="row">
@@ -154,8 +154,28 @@ function запомнить(ключ, файл){
   ПАМЯТЬ_ЗАЛИТО[ключ]=файл;
   var з=загруженные(); з[ключ]=файл;
   try{localStorage.setItem("залито", JSON.stringify(з))}catch(e){}
+  // убираем прежнюю запись с тем же именем и размером (например «в очереди»)
+  for(var i=ВСЕ.length-1;i>=0;i--){
+    if(ВСЕ[i].и===файл.и && Math.abs((ВСЕ[i].р||0)-(файл.р||0))<2)ВСЕ.splice(i,1);
+  }
   ВСЕ.unshift(файл);
 }
+
+/* ---------- восстановление списка после перезагрузки страницы ---------- */
+function объединитьПамять(){
+  var з=загруженные(), к, ф, найден, i, добавлено=0;
+  for(к in з){
+    ф=з[к];
+    if(!ф || !ф.и)continue;
+    найден=false;
+    for(i=0;i<ВСЕ.length;i++){
+      if(ВСЕ[i].и===ф.и && Math.abs((ВСЕ[i].р||0)-(ф.р||0))<2){найден=true;break}
+    }
+    if(!найден){ВСЕ.unshift(ф);добавлено++}
+  }
+  return добавлено;
+}
+
 function ключФайла(ф){return ф.name+"|"+ф.size+"|"+(ф.lastModified||0)}
 function ужеВСписке(ф){
   for(var i=0;i<ВСЕ.length;i++){
@@ -195,7 +215,7 @@ function спрятатьНастройку(){
 }
 
 /* ---------- СВЯЗЬ: Телеграм может быть заблокирован провайдером ---------- */
-var СОСТОЯНИЕ_ТГ="проверяю", МЕСТО="тг", СЕРВЕР_ОБЛАКА="";
+var СОСТОЯНИЕ_ТГ="проверяю", МЕСТО="тг", КОД_ТГ=0;
 
 function проверитьТГ(){
   if(!ТОКЕН)return Promise.resolve(false);
@@ -204,18 +224,31 @@ function проверитьТГ(){
     try{
       fetch("https://api.telegram.org/bot"+ТОКЕН+"/getMe",{mode:"cors",cache:"no-store"})
         .then(function(r){return r.json()})
-        .then(function(j){if(!готово){готово=true;clearTimeout(t);res(!!(j&&j.ok))}})
+        .then(function(j){
+          if(!готово){
+            готово=true; clearTimeout(t);
+            if(j && j.error_code===401){КОД_ТГ=401;res(false);return}
+            КОД_ТГ=0; res(!!(j&&j.ok));
+          }
+        })
         .catch(function(){if(!готово){готово=true;clearTimeout(t);res(false)}});
     }catch(e){if(!готово){готово=true;clearTimeout(t);res(false)}}
   });
 }
 function выбратьМесто(){
   return проверитьТГ().then(function(ок){
-    СОСТОЯНИЕ_ТГ = ок ? "работает" : "заблокирован";
+    СОСТОЯНИЕ_ТГ = ок ? "работает" : (КОД_ТГ===401 ? "ключ неверный" : "заблокирован");
     МЕСТО = ок ? "тг" : "очередь";
     нарисоватьСостояние(); нарисоватьОчередь();
     if(ок){ отправитьОчередь(); }
     else{
+      if(КОД_ТГ===401){
+        показатьНастройку();
+        показатьБаннер("Ключ бота не действует (Telegram ответил «Unauthorized»). Возьми новый у @BotFather → /mybots → твой бот → API Token "+
+          "и впиши: «✎ папки» → «вписать ключ бота заново». Файлы пока лежат в очереди на телефоне.");
+        setTimeout(function(){var б=$("баннер");if(б&&б.textContent.indexOf("Ключ бота")>=0)б.style.display="none"},12000);
+        return ок;
+      }
       показатьБаннер("Telegram у твоего провайдера не отвечает. Файлы пойдут в очередь на телефоне — "+
         "никуда в интернет не уходят. Как только Telegram ответит, всё уедет в него само.");
       setTimeout(function(){var б=$("баннер");if(б&&б.textContent.indexOf("очередь на телефоне")>=0)б.style.display="none"},9000);
@@ -228,6 +261,7 @@ function нарисоватьСостояние(){
   if(!э)return;
   if(СОСТОЯНИЕ_ТГ==="проверяю"){э.textContent="проверяю…";э.style.color="var(--dim)";return}
   if(СОСТОЯНИЕ_ТГ==="нет ключа"){э.textContent="нужен ключ";э.style.color="#ffb020";return}
+  if(СОСТОЯНИЕ_ТГ==="ключ неверный"){э.textContent="ключ не действует";э.style.color="var(--err)";return}
   if(СОСТОЯНИЕ_ТГ==="работает"){э.textContent="телеграм на связи";э.style.color="var(--ok)";return}
   э.textContent="телеграм молчит · очередь";э.style.color="#ffb020";
 }
@@ -280,6 +314,63 @@ function очередьВсе(){return сТранзакцией("readonly",funct
 function очередьУдалить(ключ){return сТранзакцией("readwrite",function(х){return х.delete(ключ)})}
 function очередьОбновить(запись){return сТранзакцией("readwrite",function(х){return х.put(запись)})}
 function очередьСчёт(){return очередьВсе().then(function(с){return с.length}).catch(function(){return 0})}
+
+
+/* ---------- файлы из очереди показываем в общем списке ---------- */
+function добавитьИзОчереди(){
+  return очередьВсе().then(function(список){
+    if(!список||!список.length)return 0;
+    var добавлено=0;
+    for(var i=0;i<список.length;i++){
+      var з=список[i], есть=false;
+      for(var j=0;j<ВСЕ.length;j++){
+        if(ВСЕ[j].и===з.имя && Math.abs((ВСЕ[j].р||0)-(з.размер||0))<2){есть=true;break}
+      }
+      if(!есть){
+        var ф={и:з.имя,р:з.размер||0,д:Math.floor((з.время||Date.now())/1000),о:"очередь",кл:з.ключ,т:з.тип||""};
+        ВСЕ.unshift(ф);
+        if(з.папка){РАСКЛАДКА[ключР(ф)]=з.папка}
+        добавлено++;
+      }
+    }
+    return добавлено;
+  }).catch(function(){return 0});
+}
+
+function нарисоватьОчередьВСписке(){
+  var с=$("список");
+  if(!с)return;
+  очередьВсе().then(function(список){
+    if(!список || !список.length)return;
+    var старые=с.querySelectorAll(".из-очереди");
+    for(var j=0;j<старые.length;j++)старые[j].parentNode.removeChild(старые[j]);
+    var новые=[];
+    for(var i=0;i<список.length;i++){
+      var з=список[i];
+      var д=document.createElement("div");
+      д.className="f из-очереди";
+      д.style.borderColor="#ffb020";
+      д.innerHTML='<div class="nm">'+String(з.имя||"").replace(/[<>&]/g,"")+'</div>'+
+        '<div class="mt"><span>'+размер(з.размер||0)+'</span><span class="tag" style="color:#ffb020">в очереди, ждёт Телеграм</span>'+
+        (з.папка?'<span class="tag" style="color:var(--ok)">📁 '+String(з.папка).replace(/[<>&]/g,"")+'</span>':'')+'</div>'+
+        '<div class="bar"><button class="сохр">Сохранить на телефон</button><button class="убр">Убрать из очереди</button></div>';
+      д.querySelector(".сохр").onclick=function(запись){return function(){
+        try{
+          var а=document.createElement("a");
+          а.href=URL.createObjectURL(new Blob([запись.байты],{type:запись.тип||"application/octet-stream"}));
+          а.download=запись.имя; document.body.appendChild(а); а.click();
+          setTimeout(function(){URL.revokeObjectURL(а.href);а.remove()},2000);
+        }catch(e){показатьБаннер("не смог сохранить файл")}
+      }}(з);
+      д.querySelector(".убр").onclick=function(ключ){return function(){
+        очередьУдалить(ключ).then(function(){нарисовать();нарисоватьОчередь()});
+      }}(з.ключ);
+      новые.push(д);
+    }
+    for(var к=новые.length-1;к>=0;к--){ с.insertBefore(новые[к], с.firstChild) }
+  }).catch(function(){});
+}
+
 function нарисоватьОчередь(){
   var э=$("очередь");
   if(!э)return;
@@ -576,6 +667,7 @@ function шторка(ф){
     html.push('<button data-авто="1">разложить по типам (фото, видео, документы…)</button>');
     html.push('<button class="p" data-втг="1">сохранить папки в Telegram (страховка)</button>');
     html.push('<button data-изтг="1">взять папки из Telegram</button>');
+    html.push('<button data-ключ="1">вписать ключ бота заново</button>');
     html.push('<button data-связь="1">проверить связь с Телеграмом</button>');
     html.push('<button class="p" data-очередь="1">отправить очередь в Телеграм сейчас</button>');
     html.push('<button data-скачать-очередь="1">скачать файлы из очереди на телефон</button>');
@@ -623,6 +715,9 @@ function шторка(ф){
   }});
   тело.querySelectorAll("[data-импорт]").forEach(function(к){к.onclick=function(){
     $("выбор-раскладки").value=""; $("выбор-раскладки").click();
+  }});
+  тело.querySelectorAll("[data-ключ]").forEach(function(к){к.onclick=function(){
+    закрытьШторку(); показатьНастройку();
   }});
   тело.querySelectorAll("[data-связь]").forEach(function(к){к.onclick=function(){
     закрытьШторку(); лог("проверяю связь…");
@@ -704,7 +799,7 @@ function подходит(ф){
 }
 function нарисовать(){
   var с=$("список"), найдено=[], i, ф, html=[];
-  загруженные();
+  объединитьПамять();
   for(i=0;i<ВСЕ.length;i++){ф=ВСЕ[i];if(подходит(ф))найдено.push(i)}
   $("счёт").textContent="файлов: "+ВСЕ.length+" · показано: "+найдено.length;
   if(!найдено.length){с.innerHTML='<div class="empty">ничего не найдено</div>';return}
@@ -712,20 +807,48 @@ function нарисовать(){
   for(i=0;i<до;i++){
     var и=найдено[i], f=ВСЕ[и];
     var пф=папкаФайла(f);
-    html.push('<div class="f"><div class="nm">'+f.и.replace(/[<>&]/g,"")+'</div>'+
+    var вОч=(f.о==="очередь");
+    html.push('<div class="f"'+(вОч?' style="border-color:#ffb020"':'')+'><div class="nm">'+f.и.replace(/[<>&]/g,"")+'</div>'+
       '<div class="mt"><span>'+размер(f.р)+'</span><span>'+дата(f.д)+'</span>'+
-      '<span class="tag">'+(f.о||"склад")+""+'</span>'+
+      '<span class="tag"'+(вОч?' style="color:#ffb020"':'')+'>'+(вОч?"в очереди, ждёт Телеграм":(f.о||"склад"))+""+'</span>'+
       (пф?'<span class="tag" style="color:var(--ok)">📁 '+пф.replace(/[<>&]/g,"")+'</span>':'')+
       ((f.ч>1)?'<span>частей: '+f.ч+'</span>':'')+'</div>'+
-      '<div class="bar"><button class="p" data-с="'+и+'">Скачать</button>'+
-      '<button data-ш="'+и+'">Ссылка</button>'+
-      '<button data-пк="'+и+'">В папку</button></div></div>');
+      '<div class="bar">'+(вОч?
+        ('<button class="p" data-соч="'+и+'">Сохранить на телефон</button><button data-уоч="'+и+'">Убрать</button>')
+        :
+        ('<button class="p" data-с="'+и+'">Скачать</button><button data-ш="'+и+'">Ссылка</button><button data-пк="'+и+'">В папку</button>')
+      )+'</div></div>');
   }
   if(найдено.length>до)html.push('<div class="empty">показаны первые '+до+' из '+найдено.length+' — уточни поиск</div>');
   с.innerHTML=html.join("");
   с.querySelectorAll("[data-с]").forEach(function(к){к.onclick=function(){скачать(ВСЕ[+к.dataset.с])}});
   с.querySelectorAll("[data-ш]").forEach(function(к){к.onclick=function(){поделиться(ВСЕ[+к.dataset.ш])}});
   с.querySelectorAll("[data-пк]").forEach(function(к){к.onclick=function(){шторка(ВСЕ[+к.dataset.пк])}});
+  с.querySelectorAll("[data-соч]").forEach(function(к){к.onclick=function(){
+    var ф=ВСЕ[+к.dataset.соч];
+    очередьВсе().then(function(список){
+      for(var i=0;i<список.length;i++){
+        if(список[i].ключ===ф.кл){
+          try{
+            var а=document.createElement("a");
+            а.href=URL.createObjectURL(new Blob([список[i].байты],{type:список[i].тип||"application/octet-stream"}));
+            а.download=список[i].имя; document.body.appendChild(а); а.click();
+            setTimeout(function(){URL.revokeObjectURL(а.href);а.remove()},2000);
+            показатьБаннер("файл отдан в «Файлы» → «Загрузки»");
+          }catch(e){показатьБаннер("не смог сохранить")}
+          break;
+        }
+      }
+    });
+  }});
+  с.querySelectorAll("[data-уоч]").forEach(function(к){к.onclick=function(){
+    var и=+к.dataset.уоч, ф=ВСЕ[и];
+    if(!confirm("Убрать «"+ф.и+"» из очереди? Файл будет удалён с телефона."))return;
+    очередьУдалить(ф.кл).then(function(){
+      for(var j=0;j<ВСЕ.length;j++){if(ВСЕ[j]===ф){ВСЕ.splice(j,1);break}}
+      нарисовать(); нарисоватьОчередь();
+    });
+  }});
 }
 
 function ссылкаНа(f){
@@ -781,7 +904,15 @@ function отправить(часть, имя, описание, прогрес
     if(закрыт)return; закрыт=true;
     var j=null; try{j=JSON.parse(xhr.responseText)}catch(e){}
     if(xhr.status===200 && j && j.ok){ готово(true, j) }
-    else{ готово(false, null, (j&&j.description)||("код "+xhr.status)) }
+    else{
+      if(xhr.status===401 || (j && j.error_code===401)){
+        СОСТОЯНИЕ_ТГ="ключ неверный"; МЕСТО="очередь"; нарисоватьСостояние();
+        показатьНастройку();
+        показатьБаннер("Ключ бота больше не действует. Возьми новый у @BotFather → /mybots → твой бот → API Token, "+
+          "и впиши его в «✎ папки» → «вписать ключ заново». Файлы пока лежат в очереди на телефоне.");
+      }
+      готово(false, null, (j&&j.description)||("код "+xhr.status));
+    }
   };
   xhr.onerror=function(){ if(закрыт)return; закрыт=true;
     СОСТОЯНИЕ_ТГ="заблокирован"; МЕСТО="облако"; нарисоватьСостояние();
@@ -804,7 +935,8 @@ function одинФайл(f, готово){
     вОчередь(f, папка).then(function(){
       обновитьПрогресс(f.name,1,f.size,f.size,"в очереди");
       лог("в очередь (на телефоне): "+f.name+" ("+размер(f.size)+")");
-      нарисоватьОчередь(); итог(true,true);
+      добавитьИзОчереди().then(function(){нарисовать();нарисоватьПапки();нарисоватьОчередь()});
+      итог(true,true);
     }).catch(function(е){
       показатьБаннер("не смог положить в очередь: "+e.message);
       итог(false,true);
@@ -850,7 +982,9 @@ function запуститьФайлы(список){
         var пп=(активПапка && активПапка!==БЕЗ)?активПапка:"";
         return вОчередь(f, пп).then(function(){
           пропущено++; лог("отложил на телефоне: "+f.name+" — уйдёт, когда Телеграм ответит");
-          нарисоватьОчередь(); setTimeout(шаг,250);
+          return добавитьИзОчереди();
+        }).then(function(){
+          нарисовать(); нарисоватьПапки(); нарисоватьОчередь(); setTimeout(шаг,250);
         });
       }
       if(пропуск)пропущено++;
@@ -896,6 +1030,8 @@ function старт(){
     };
     $("позже").onclick=спрятатьНастройку;
     прочестьПапки();
+    объединитьПамять();
+    добавитьИзОчереди().then(function(){нарисовать();нарисоватьПапки()});
     нарисоватьПапки();
     нарисовать();
     нарисоватьСтатусПапок();
@@ -906,7 +1042,7 @@ function старт(){
       СТАТУС_ПАПОК="только в телефоне"; нарисоватьСтатусПапок();
     });
     $("выбор-раскладки").onchange=function(e){if(e.target.files&&e.target.files[0])загрузитьРаскладкуИзФайла(e.target.files[0])};
-    if(нуженТокен()){показатьНастройку();СОСТОЯНИЕ_ТГ="нет ключа";нарисоватьСостояние();}
+    if(нуженТокен()){показатьНастройку();СОСТОЯНИЕ_ТГ="нет ключа";МЕСТО="очередь";нарисоватьСостояние();}
     else{выбратьМесто()}
     запуститьОчередь();
     try{нарисоватьОчередь()}catch(e){}
@@ -934,7 +1070,7 @@ window.ХРАНИЛИЩЕ={папки:function(){return ПАПКИ},раскла
   статус:function(){return СТАТУС_ПАПОК},время:function(){return ВРЕМЯ_РАСКЛАДКИ},
   место:function(){return МЕСТО},состояниеТГ:function(){return СОСТОЯНИЕ_ТГ},
   проверитьМесто:выбратьМесто,очередь:очередьВсе,вОчередь:вОчередь,
-  отправитьОчередь:отправитьОчередь,очередьУдалить:очередьУдалить,сохранитьТокен:сохранитьТокен,естьТокен:function(){return !!ТОКЕН}};
+  отправитьОчередь:отправитьОчередь,очередьУдалить:очередьУдалить,сохранитьТокен:сохранитьТокен,естьТокен:function(){return !!ТОКЕН},объединить:объединитьПамять};
 if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",старт)}else{старт()}
 setTimeout(function(){
   if($("счёт").textContent==="загрузка…"){
