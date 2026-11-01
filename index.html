@@ -68,7 +68,7 @@ footer button{flex:1}
 </style></head><body>
 
 <header>
-  <h1><span>ХРАНИЛИЩЕ <span style="font-size:11px;color:#8b97a8">v4.3</span> <span id="ключ-кнопка" style="font-size:12px;color:#7fb2ff;border:1px solid #2b3546;border-radius:8px;padding:1px 7px">🔑 ключ</span></span><span id="связь" style="font-size:11px;color:var(--dim)">проверяю…</span></h1>
+  <h1><span>ХРАНИЛИЩЕ <span style="font-size:11px;color:#8b97a8">v4.4</span> <span id="ключ-кнопка" style="font-size:12px;color:#7fb2ff;border:1px solid #2b3546;border-radius:8px;padding:1px 7px">🔑 ключ</span></span><span id="связь" style="font-size:11px;color:var(--dim)">проверяю…</span></h1>
   <div class="sub" id="счёт">загрузка…</div>
   <input id="поиск" type="search" placeholder="поиск: имя, тег…" autocomplete="off">
   <div class="row">
@@ -147,7 +147,37 @@ window.ВСТРОЕННЫЙ={"файлы":[{"и":"ПАМЯТЬ-20261029-1819.tar
 (function(){
 "use strict";
 var ТОКЕН="";
-var ЧАТ="7023156818";
+var ЧАТ="7023156818";          // личный чат с ботом
+var КАНАЛ="";                   // отдельный канал-хранилище (если задан — всё пишем туда)
+function чз(){ return КАНАЛ || ЧАТ }   // куда отправлять
+function прочестьКанал(){
+  try{ КАНАЛ=localStorage.getItem("канал-хранилище")||"" }catch(e){ КАНАЛ="" }
+  return КАНАЛ;
+}
+function поставитьКанал(ид){
+  var было=КАНАЛ;
+  КАНАЛ=(ид||"")+"" ;
+  if(КАНАЛ!==было){
+    // новый адрес — прежние номера сообщений к нему не относятся
+    try{
+      var преж=прочестьГлавное();
+      ПРЕЖНИЕ_ИДЫ=(преж.индекс||[]).concat(преж.раскладка||[]);
+      if(преж.оглавление)ПРЕЖНИЕ_ИДЫ.push(преж.оглавление);
+      var фс=Number(localStorage.getItem("файл-списка")||0); if(фс)ПРЕЖНИЕ_ИДЫ.push(фс);
+    }catch(e){ ПРЕЖНИЕ_ИДЫ=[] }
+    СТРАХОВКА_ИДЫ={раскладка:[],индекс:[],оглавление:0,время:0};
+    ОГЛАВЛЕНИЕ_ПРОЧТЕНО=false;
+    try{ localStorage.removeItem("тг-главное"); localStorage.removeItem("файл-списка") }catch(e){}
+    записатьГлавное();
+  }
+  try{
+    if(КАНАЛ)localStorage.setItem("канал-хранилище",КАНАЛ);
+    else localStorage.removeItem("канал-хранилище");
+    if(КАНАЛ){ localStorage.setItem("режим-списка","текст") }
+  }catch(e){}
+  if(КАНАЛ)сообщитьКаналВЛС();
+  return КАНАЛ;
+}
 var ПРЕДЕЛ=45*1024*1024;          // больше — режем на части (у Telegram потолок 50 МБ)
 var ВСЕ = (window.ВСТРОЕННЫЙ && window.ВСТРОЕННЫЙ.файлы) ? window.ВСТРОЕННЫЙ.файлы.slice() : [];
 var фильтр="все", стоп=false, очередь=[], занято=false;
@@ -161,8 +191,24 @@ function размер(б){if(!б)return"0 Б";if(б<1024)return б+" Б";if(б<1
 function дата(t){if(!t)return"";try{return new Date(t*1000).toLocaleDateString("ru-RU")}catch(e){return""}}
 function естьАндроид(){return !!(window.Андроид && window.Андроид.call)}
 
+var АДРЕС_ГОТОВ=false;
 function тг(метод, тело){
+  тело=тело||{};
   if(естьАндроид()){try{return Promise.resolve(JSON.parse(window.Андроид.call(метод, JSON.stringify(тело||{}))))}catch(e){}}
+  // пока адрес (канал) не известен — ждём; затем переписываем chat_id на актуальный
+  var ждём=Promise.resolve();
+  if(!АДРЕС_ГОТОВ && ТОКЕН)ждём=ждёмКанал().catch(function(){});
+  return ждём.then(function(){
+    АДРЕС_ГОТОВ=true;
+    return отправитьТГ(метод, тело);
+  });
+}
+function отправитьТГ(метод, тело, какЕсть){
+  тело=тело||{};
+  if(!какЕсть){
+    if(тело.chat_id!==undefined && String(тело.chat_id)===String(ЧАТ))тело.chat_id=чз();
+    if(тело.from_chat_id!==undefined && String(тело.from_chat_id)===String(ЧАТ))тело.from_chat_id=чз();
+  }
   return fetch("https://api.telegram.org/bot"+ТОКЕН+"/"+метод,
     {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(тело||{})})
     .then(function(r){return r.json()});
@@ -718,14 +764,14 @@ function удалитьСтарыеЧасти(){
   try{старые=JSON.parse(localStorage.getItem("тг-части")||"[]")}catch(e){старые=[]}
   if(!старые.length)return Promise.resolve();
   return Promise.all(старые.map(function(ид){
-    return тг("deleteMessage",{chat_id:ЧАТ,message_id:ид}).catch(function(){});
+    return тг("deleteMessage",{chat_id:чз(),message_id:ид}).catch(function(){});
   })).then(function(){try{localStorage.setItem("тг-части","[]")}catch(e){}});
 }
 function отправитьЧасти(куски, отступ){
   var иды=[];
   function шлём(i){
     if(i>=куски.length)return Promise.resolve(иды);
-    return тг("sendMessage",{chat_id:ЧАТ,text:куски[i]||"0",disable_notification:true,disable_web_page_preview:true})
+    return тг("sendMessage",{chat_id:чз(),text:куски[i]||"0",disable_notification:true,disable_web_page_preview:true})
       .then(function(j){
         if(!j||!j.ok)throw new Error("часть "+(i+1)+" не ушла");
         иды.push(j.result.message_id);
@@ -738,7 +784,7 @@ function отправитьЧасти(куски, отступ){
 function удалитьМоиСообщения(иды){
   if(!иды||!иды.length)return Promise.resolve();
   return Promise.all(иды.map(function(ид){
-    return тг("deleteMessage",{chat_id:ЧАТ,message_id:ид}).catch(function(){});
+    return тг("deleteMessage",{chat_id:чз(),message_id:ид}).catch(function(){});
   }));
 }
 function сохранитьВсёВТГ(){
@@ -754,11 +800,11 @@ function сохранитьВсёВТГ(){
   }).then(function(и2){
     идыИ=и2;
     var огл="ГЛАВНОЕ1|"+ВРЕМЯ_РАСКЛАДКИ+"|"+идыР.join(",")+"|"+идыИ.join(",");
-    return тг("sendMessage",{chat_id:ЧАТ,text:огл,disable_notification:true,disable_web_page_preview:true});
+    return тг("sendMessage",{chat_id:чз(),text:огл,disable_notification:true,disable_web_page_preview:true});
   }).then(function(j){
     if(!j||!j.ok)throw new Error("оглавление не ушло");
     var mid=j.result.message_id;
-    return тг("pinChatMessage",{chat_id:ЧАТ,message_id:mid,disable_notification:true}).then(function(){
+    return тг("pinChatMessage",{chat_id:чз(),message_id:mid,disable_notification:true}).then(function(){
       var прежние=[];
       try{ var г=JSON.parse(localStorage.getItem("тг-главное")||"{}"); прежние=(г.раскладка||[]).concat(г.индекс||[]) }catch(e){}
       СТРАХОВКА_ИДЫ={время:ВРЕМЯ_РАСКЛАДКИ,раскладка:идыР,индекс:идыИ,оглавление:mid}; записатьГлавное();
@@ -795,7 +841,7 @@ function подхватитьОглавление(){
   if((г.индекс&&г.индекс.length)&&г.оглавление)return Promise.resolve(true);
   if(ОГЛАВЛЕНИЕ_ПРОЧТЕНО&&!(г.индекс&&г.индекс.length))return Promise.resolve(false);
   ОГЛАВЛЕНИЕ_ПРОЧТЕНО=true;
-  return тг("getChat",{chat_id:ЧАТ}).then(function(j){
+  return тг("getChat",{chat_id:чз()}).then(function(j){
     var п=((j&&j.result)||{}).pinned_message||{};
     var т=п.text||"";
     if(т.indexOf("ГЛАВНОЕ1|")===0){
@@ -814,20 +860,20 @@ function обновитьОглавление(){
   var г=прочестьГлавное();
   var т="ГЛАВНОЕ1|"+(г.время||Math.floor(Date.now()/1000))+"|"+г.раскладка.join(",")+"|"+г.индекс.join(",");
   if(г.оглавление){
-    return тг("editMessageText",{chat_id:ЧАТ,message_id:г.оглавление,text:т,disable_web_page_preview:true})
+    return тг("editMessageText",{chat_id:чз(),message_id:г.оглавление,text:т,disable_web_page_preview:true})
       .then(function(j){ if(j&&j.ok)return true; throw new Error("правка не прошла") })
       .catch(function(){
-        return тг("sendMessage",{chat_id:ЧАТ,text:т}).then(function(j){
+        return тг("sendMessage",{chat_id:чз(),text:т}).then(function(j){
           if(!j||!j.ok)throw new Error("оглавление не ушло");
           г.оглавление=j.result.message_id; записатьГлавное();
-          return тг("pinChatMessage",{chat_id:ЧАТ,message_id:г.оглавление,disable_notification:true}).catch(function(){});
+          return тг("pinChatMessage",{chat_id:чз(),message_id:г.оглавление,disable_notification:true}).catch(function(){});
         });
       });
   }
-  return тг("sendMessage",{chat_id:ЧАТ,text:т}).then(function(j){
+  return тг("sendMessage",{chat_id:чз(),text:т}).then(function(j){
     if(!j||!j.ok)throw new Error("оглавление не ушло");
     г.оглавление=j.result.message_id; записатьГлавное();
-    return тг("pinChatMessage",{chat_id:ЧАТ,message_id:г.оглавление,disable_notification:true}).catch(function(){});
+    return тг("pinChatMessage",{chat_id:чз(),message_id:г.оглавление,disable_notification:true}).catch(function(){});
   });
 }
 function строкиФайла(ф){
@@ -893,6 +939,173 @@ function запуститьПриложение(ф){
     setTimeout(function(){var б=$("баннер");if(б)б.style.display="none"},4000);
   }).catch(function(е){показатьБаннер("не смог открыть: "+((е&&е.message)||е))});
 }
+
+/* ================= ОТДЕЛЬНЫЙ КАНАЛ-ХРАНИЛИЩЕ ================= */
+function найтиКанал(){
+  if(!ТОКЕН)return Promise.resolve({ок:false, текст:"нет ключа бота"});
+  return тг("deleteWebhook",{drop_pending_updates:false}).catch(function(){}).then(function(){
+    return тг("getUpdates",{offset:-20,limit:100,allowed_updates:["channel_post","message"]});
+  }).then(function(j){
+    if(!j||!j.ok)throw new Error((j&&j.description)||"getUpdates не ответил");
+    var найдено=[], i, о;
+    for(i=0;i<(j.result||[]).length;i++){
+      о=j.result[i];
+      var с=(о.channel_post&&о.channel_post.chat)||null;
+      if(с && с.id){
+        var есть=false;
+        for(var к=0;к<найдено.length;к++){ if(найдено[к].id===с.id)есть=true }
+        if(!есть)найдено.push({id:с.id,title:с.title||"канал"});
+      }
+    }
+    if(!найдено.length)return {ок:false, текст:"не вижу канал. Проверь: бот добавлен АДМИНОМ в канал, и в канале есть хоть один пост"};
+    return {ок:true, каналы:найдено};
+  }).catch(function(е){ return {ок:false, текст:((е&&е.message)||е)} });
+}
+
+var ПРЕЖНИЕ_ИДЫ=[];
+var ОБЕЩАНИЕ_КАНАЛА=null;
+function ждёмКанал(){
+  if(ОБЕЩАНИЕ_КАНАЛА)return ОБЕЩАНИЕ_КАНАЛА;
+  if(КАНАЛ||!ТОКЕН){ ОБЕЩАНИЕ_КАНАЛА=Promise.resolve(КАНАЛ); return ОБЕЩАНИЕ_КАНАЛА }
+  ОБЕЩАНИЕ_КАНАЛА=узнатьКаналИзЛС().then(function(к){
+    if(к)нарисоватьСтатусПапок();
+    return к;
+  }).catch(function(){return ""});
+  return ОБЕЩАНИЕ_КАНАЛА;
+}
+function сообщитьКаналВЛС(){
+  if(!КАНАЛ||!ТОКЕН)return Promise.resolve(false);
+  var метка="ХРАНИЛИЩЕ-КАНАЛ|"+КАНАЛ;
+  var старый=0;
+  try{ старый=Number(localStorage.getItem("метка-канала")||0) }catch(e){}
+  return отправитьТГ("getChat",{chat_id:ЧАТ},1).then(function(г){
+    var з=(г&&г.ok&&г.result&&г.result.pinned_message)||{};
+    if((з.text||"")===метка){ try{ localStorage.setItem("метка-канала",з.message_id) }catch(e){} return true }
+    var старый2=з.message_id||старый;
+    return отправитьМетку(метка,старый2);
+  }).catch(function(){ return отправитьМетку(метка,старый) });
+}
+function отправитьМетку(метка,старый){
+  return отправитьТГ("sendMessage",{chat_id:ЧАТ,text:метка,disable_web_page_preview:true},1).then(function(j){
+    if(!j||!j.ok)return false;
+    var mid=j.result.message_id;
+    try{ localStorage.setItem("метка-канала",mid) }catch(e){}
+    var хвост=отправитьТГ("pinChatMessage",{chat_id:ЧАТ,message_id:mid,disable_notification:true},1).catch(function(){});
+    if(старый&&старый!==mid)хвост=хвост.then(function(){return отправитьТГ("deleteMessage",{chat_id:ЧАТ,message_id:старый},1).catch(function(){})});
+    return хвост.then(function(){ подтвердитьМетку(метка,0); return true });
+  }).catch(function(){return false});
+}
+// метка должна остаться в закрепе: другие записи могли её перебить
+function подтвердитьМетку(метка,раз){
+  раз=раз||0;
+  if(!КАНАЛ)return;
+  setTimeout(function(){
+    if(!КАНАЛ)return;
+    отправитьТГ("getChat",{chat_id:ЧАТ}).then(function(г){
+      var з=(г&&г.ok&&г.result&&г.result.pinned_message)||{};
+      if((з.text||"")===метка)return;
+      if(раз<3)отправитьМетку(метка,з.message_id||0).then(function(){подтвердитьМетку(метка,раз+1)});
+    }).catch(function(){});
+  }, раз===0?6000:(10000*раз));
+}
+function узнатьКаналИзЛС(){
+  if(!ТОКЕН)return Promise.resolve("");
+  return отправитьТГ("getChat",{chat_id:ЧАТ},1).then(function(j){
+    var з=(j&&j.ok&&j.result&&j.result.pinned_message&&j.result.pinned_message.text)||"";
+    var м=/ХРАНИЛИЩЕ-КАНАЛ\|(-?\d+)/.exec(з);
+    if(!м)return "";
+    поставитьКанал(м[1]);
+    return м[1];
+  }).catch(function(){return ""});
+}
+
+function перенестиВсёВКанал(){
+  if(!КАНАЛ)return Promise.resolve({перенесено:0, текст:"канал не выбран"});
+  var з=загруженные(), список=[], к;
+  for(к in з){ if(з[к]&&з[к].мсг)список.push(з[к]) }
+  if(!список.length)return Promise.resolve({перенесено:0, текст:"нет файлов с номерами сообщений"});
+  var сделано=0, ошибок=0, i=0;
+  function шаг(){
+    if(i>=список.length){
+      try{localStorage.setItem("залито",JSON.stringify(з))}catch(e){}
+      ПАМЯТЬ_ЗАЛИТО=з;
+      var убрано=0, д=ПРЕЖНИЕ_ИДЫ.slice();
+      ПРЕЖНИЕ_ИДЫ=[];
+      function чистить(){
+        if(!д.length)return Promise.resolve({перенесено:сделано, ошибок:ошибок, убрано:убрано,
+          текст:"перенесено "+сделано+" из "+список.length+(убрано?(" · очищено служебных "+убрано):"")});
+        var и=д.shift();
+        return отправитьТГ("deleteMessage",{chat_id:ЧАТ,message_id:и},1).then(function(){убрано++}).catch(function(){}).then(чистить);
+      }
+      return чистить().then(function(итог){
+        // в канале сразу пишем и полный список, чтобы он читался на любом устройстве
+        return Promise.resolve(сохранитьВсёВТГ()).catch(function(){}).then(function(){ return итог });
+      });
+    }
+    var ф=список[i++];
+    СТАТУС_ПАПОК="переношу в канал: "+сделано+" из "+список.length; нарисоватьСтатусПапок();
+    return отправитьТГ("copyMessage",{chat_id:КАНАЛ,from_chat_id:ЧАТ,message_id:ф.мсг},1).then(function(j){
+      if(!j||!j.ok)throw new Error((j&&j.description)||"copy не прошёл");
+      var новый=j.result.message_id;
+      var старый=ф.мсг;
+      ф.мсг=новый;
+      сделано++;
+      return отправитьТГ("deleteMessage",{chat_id:ЧАТ,message_id:старый},1).catch(function(){});
+    }).catch(function(){ ошибок++; }).then(шаг);
+  }
+  return шаг();
+}
+function показатьКанал(){
+  var тело=$("шторка-тело");
+  var канал=прочестьКанал();
+  var т=[];
+  т.push('<h3>Отдельный канал-хранилище</h3>');
+  if(канал){
+    т.push('<div class="подсказка" style="color:var(--ok)">Сейчас всё пишется в канал: <b>'+канал+'</b>. Чат с ботом остаётся чистым.</div>');
+    т.push('<button data-перенос-канал="1">📦 перенести уже залитое в канал и очистить чат с ботом</button>');
+    т.push('<button data-канал-выкл="1">выключить канал (писать снова в чат с ботом)</button>');
+  } else {
+    т.push('<div class="подсказка"><b>Зачем:</b> всё хранится в Telegram, но в отдельном канале — в чате с ботом не будет ни строк, ни списков. Канал видишь только ты.</div>');
+    т.push('<div class="подсказка"><b>Шаг 1.</b> В Telegram: «+» → «Создать канал» → название любое (например «Хранилище») → тип <b>приватный</b>.</div>');
+    т.push('<div class="подсказка"><b>Шаг 2.</b> В канале: имя канала сверху → «Участники» → «Добавить» → найди <b>своего бота</b> с галочкой → дай права <b>администратора</b> (публикация сообщений включена).</div>');
+    т.push('<div class="подсказка"><b>Шаг 3.</b> Напиши в канале любое сообщение, например «готово».</div>');
+    т.push('<div class="подсказка"><b>Шаг 4.</b> Вернись сюда и нажми кнопку ниже — я сам найду канал.</div>');
+    т.push('<button class="p" data-искать-канал="1">🔎 найти канал</button>');
+  }
+  т.push('<div id="канал-итог" class="подсказка"></div>');
+  т.push('<button data-закрыть="1">закрыть</button>');
+  тело.innerHTML=т.join("");
+  $("шторка").style.display="flex";
+  тело.querySelectorAll("[data-закрыть]").forEach(function(к){к.onclick=закрытьШторку});
+  тело.querySelectorAll("[data-искать-канал]").forEach(function(к){к.onclick=function(){
+    var ит=$("канал-итог"); ит.textContent="ищу…";
+    найтиКанал().then(function(р){
+      if(!р.ок){ ит.textContent="не нашёл: "+р.текст; return }
+      ит.innerHTML='<div style="margin:6px 0">нашёл каналы — нажми нужный:</div>'+
+        р.каналы.map(function(к){return '<button class="p" data-выбрать-канал="'+к.id+'">'+к.title+' ('+к.id+')</button>'}).join("");
+      $("шторка-тело").querySelectorAll("[data-выбрать-канал]").forEach(function(б){б.onclick=function(){
+        поставитьКанал(б.dataset.выбратьКанал);
+        закрытьШторку();
+        показатьБаннер("канал выбран: "+КАНАЛ+" · теперь файлы и список идут только туда");
+        нарисоватьСтатусПапок();
+        записатьСписокФайлом();
+      }});
+    });
+  }});
+  тело.querySelectorAll("[data-перенос-канал]").forEach(function(к){к.onclick=function(){
+    закрытьШторку(); показатьБаннер("переношу файлы в канал — это может занять время…");
+    перенестиВсёВКанал().then(function(р){
+      показатьБаннер("перенос в канал: "+р.текст+(р.ошибок?(" · не удалось "+р.ошибок):""));
+      записатьСписокФайлом();
+    });
+  }});
+  тело.querySelectorAll("[data-канал-выкл]").forEach(function(к){к.onclick=function(){
+    поставитьКанал("");
+    закрытьШторку(); нарисоватьСтатусПапок();
+    показатьБаннер("канал выключен — пишу снова в чат с ботом");
+  }});
+}
+
 function показатьПамять(){
   var тело=$("шторка-тело");
   тело.innerHTML='<h3>Память телефона</h3><div class="подсказка">считаю…</div>';
@@ -1092,7 +1305,7 @@ function отправитьДокумент(текст, имя){
     xhr.onerror=function(){rej(new Error("нет связи с Telegram"))};
     xhr.ontimeout=function(){rej(new Error("истекло время"))};
     var фд=new FormData();
-    фд.append("chat_id",ЧАТ);
+    фд.append("chat_id",чз());
     фд.append("caption","список хранилища · "+списокГраф());
     фд.append("document", new Blob([текст],{type:"text/plain"}), имя);
     xhr.send(фд);
@@ -1112,17 +1325,17 @@ function записатьСписокФайлом(){
   return отправитьДокумент(текст,"СПИСОК-ХРАНИЛИЩА.txt").then(function(j){
     var мид=j.result.message_id;
     // старый файл убираем — в чате всегда один список
-    if(старый && старый!==мид)тг("deleteMessage",{chat_id:ЧАТ,message_id:старый}).catch(function(){});
+    if(старый && старый!==мид)тг("deleteMessage",{chat_id:чз(),message_id:старый}).catch(function(){});
     try{ localStorage.setItem("файл-списка",String(мид)) }catch(e){}
     var г=прочестьГлавное();
     var т="СПИСОК-ФАЙЛ|"+Math.floor(Date.now()/1000)+"|"+мид+"|"+списокГраф();
     var сделать=г.оглавление?
-      тг("editMessageText",{chat_id:ЧАТ,message_id:г.оглавление,text:т}).catch(function(){
-        return тг("sendMessage",{chat_id:ЧАТ,text:т}).then(function(jj){ г.оглавление=jj.result.message_id; записатьГлавное(); return jj })
+      тг("editMessageText",{chat_id:чз(),message_id:г.оглавление,text:т}).catch(function(){
+        return тг("sendMessage",{chat_id:чз(),text:т}).then(function(jj){ г.оглавление=jj.result.message_id; записатьГлавное(); return jj })
       }) :
-      тг("sendMessage",{chat_id:ЧАТ,text:т}).then(function(jj){ г.оглавление=jj.result.message_id; записатьГлавное(); return jj });
+      тг("sendMessage",{chat_id:чз(),text:т}).then(function(jj){ г.оглавление=jj.result.message_id; записатьГлавное(); return jj });
     return сделать.then(function(){
-      return тг("pinChatMessage",{chat_id:ЧАТ,message_id:г.оглавление,disable_notification:true}).catch(function(){});
+      return тг("pinChatMessage",{chat_id:чз(),message_id:г.оглавление,disable_notification:true}).catch(function(){});
     }).then(function(){
       // старые текстовые части больше не нужны
       var мусор=(г.раскладка||[]).concat(г.индекс||[]);
@@ -1190,7 +1403,7 @@ function убратьМусорИзЧата(){
   var удалено=0;
   function по(i){
     if(i>=список.length)return Promise.resolve(удалено);
-    return тг("deleteMessage",{chat_id:ЧАТ,message_id:список[i]}).then(function(j){
+    return тг("deleteMessage",{chat_id:чз(),message_id:список[i]}).then(function(j){
       if(j&&j.ok)удалено++;
       return по(i+1);
     }).catch(function(){return по(i+1)});
@@ -1213,7 +1426,7 @@ function полнаяПроверка(){
     }
     итог.ключ="принят";
     итог.бот=(j.result&&j.result.username)||"";
-    return тг("getChat",{chat_id:ЧАТ}).then(function(g){
+    return тг("getChat",{chat_id:чз()}).then(function(g){
       if(g&&g.ok){
         итог.чат="да";
         var п=(g.result||{}).pinned_message||{};
@@ -1263,12 +1476,12 @@ function сохранитьРаскладкуВТГ(){
 function прочестьЧасть(ид){
   ид=parseInt(ид,10);
   if(!ид||isNaN(ид))return Promise.resolve("");
-  return тг("forwardMessage",{chat_id:ЧАТ,from_chat_id:ЧАТ,message_id:ид,disable_notification:true})
+  return тг("forwardMessage",{chat_id:чз(),from_chat_id:чз(),message_id:ид,disable_notification:true})
     .then(function(j){
       if(!j||!j.ok)return "";
       var копия=j.result.message_id;
       var т=j.result.text||"";
-      тг("deleteMessage",{chat_id:ЧАТ,message_id:копия}).catch(function(){});
+      тг("deleteMessage",{chat_id:чз(),message_id:копия}).catch(function(){});
       return т;
     });
 }
@@ -1294,7 +1507,7 @@ function разобратьИндекс(текст){
 }
 function взятьВсёИзТГ(){
   if(!ТОКЕН)return Promise.resolve(false);
-  return тг("getChat",{chat_id:ЧАТ}).then(function(j){
+  return тг("getChat",{chat_id:чз()}).then(function(j){
     if(!j||!j.ok)return false;
     var п=(j.result||{}).pinned_message||{};
     var т=п.text||"";
@@ -1324,7 +1537,7 @@ function взятьВсёИзТГ(){
 }
 function взятьРаскладкуИзТГ(){
   if(!ТОКЕН)return Promise.resolve(false);
-  return тг("getChat",{chat_id:ЧАТ}).then(function(j){
+  return тг("getChat",{chat_id:чз()}).then(function(j){
     if(!j||!j.ok)return false;
     var п=(j.result||{}).pinned_message||{};
     var т=п.text||"";
@@ -1347,7 +1560,7 @@ function взятьРаскладкуИзТГ(){
 function нарисоватьСтатусПапок(){
   var э=$("статус-папок");
   if(!э)return;
-  э.textContent="папки: "+(СТАТУС_ПАПОК||"только в телефоне");
+  э.textContent="папки: "+(СТАТУС_ПАПОК||"только в телефоне")+(КАНАЛ?(" · пишу в канал "+КАНАЛ):"");
   э.style.color=(СТАТУС_ПАПОК.indexOf("ТГ сохранено")>=0)?"var(--ok)":"var(--dim)";
 }
 function crc32(т){
@@ -1609,6 +1822,7 @@ function шторка(ф){
     html.push('<button class="p" data-новая="1">＋ новая папка…</button>');
     html.push('<button data-авто="1">разложить по типам (фото, видео, документы…)</button>');
     html.push('<div class="подсказка" style="margin-top:12px"><b>перенести всё в папку</b> — одно нажатие</div>');
+    html.push('<button class="p" data-канал="1">📡 отдельный канал-хранилище (чат чистый)</button>');
     html.push('<div class="подсказка" style="margin-top:12px"><b>как хранить список файлов в чате</b> (сейчас: '+
       (режимСписка()==="файл"?"одним файлом":"текстом")+')</div>');
     html.push('<button class="p" data-режим-файл="1">📄 одним файлом — чат чистый (рекомендую)</button>');
@@ -1741,6 +1955,9 @@ function шторка(ф){
       setTimeout(function(){var б=$("баннер");if(б)б.style.display="none"},4000);
     });
     закрытьШторку();
+  }});
+  тело.querySelectorAll("[data-канал]").forEach(function(к){к.onclick=function(){
+    показатьКанал();
   }});
   тело.querySelectorAll("[data-режим-файл]").forEach(function(к){к.onclick=function(){
     поставитьРежим("файл");
@@ -1951,13 +2168,13 @@ function нарисовать(){
 }
 
 function fileIdИзСообщения(мсг){
-  return тг("forwardMessage",{chat_id:ЧАТ,from_chat_id:ЧАТ,message_id:мсг,disable_notification:true})
+  return тг("forwardMessage",{chat_id:чз(),from_chat_id:чз(),message_id:мсг,disable_notification:true})
     .then(function(j){
       if(!j||!j.ok)throw new Error("сообщение не найдено");
       var копия=j.result.message_id;
       var ид=(j.result.document&&j.result.document.file_id)||
              (j.result.photo&&j.result.photo[j.result.photo.length-1]&&j.result.photo[j.result.photo.length-1].file_id)||"";
-      тг("deleteMessage",{chat_id:ЧАТ,message_id:копия}).catch(function(){});
+      тг("deleteMessage",{chat_id:чз(),message_id:копия}).catch(function(){});
       if(!ид)throw new Error("в сообщении нет файла");
       return ид;
     });
@@ -2033,7 +2250,7 @@ function отправить(часть, имя, описание, прогрес
     готово(false,null,"телеграм не отвечает — переключаюсь на облако") };
   xhr.ontimeout=function(){ if(закрыт)return; закрыт=true; готово(false,null,"истекло время") };
   var фд=new FormData();
-  фд.append("chat_id", ЧАТ);
+  фд.append("chat_id", чз());
   фд.append("caption", описание);
   фд.append("document", часть, имя);
   xhr.send(фд);
@@ -2517,6 +2734,7 @@ function старт(){
     };
     привязатьВыбор();
     прочестьПапки();
+    try{ прочестьКанал() }catch(e){}
     try{ var ап=localStorage.getItem("активная-папка")||"";
       if(ап && (ап===БЕЗ || ПАПКИ.indexOf(ап)>=0))активПапка=ап; }catch(e){}
     объединитьПамять();
@@ -2536,6 +2754,7 @@ function старт(){
     // если Telegram отвечает — сами подтягиваем список файлов из чата, чтобы всё было видно на любом устройстве
     if(ТОКЕН){
       setTimeout(function(){
+       ждёмКанал().then(function(){
         проверитьТГ().then(function(живой){
           if(!живой)return;
           взятьВсёИзТГ().then(function(р){
@@ -2553,6 +2772,7 @@ function старт(){
             }
           });
         });
+       }).catch(function(){});
       }, 1200);
     }
     добавитьИзОчереди().then(function(){нарисовать();нарисоватьПапки()});
@@ -2560,11 +2780,13 @@ function старт(){
     нарисовать();
     нарисоватьСтатусПапок();
     проверкаХранилища();
-    взятьРаскладкуИзТГ().then(function(ок){
-      if(ок){нарисоватьСтатусПапок();return}
-      if(ВРЕМЯ_РАСКЛАДКИ>0){сохранитьРаскладкуВТГ();return}
-      СТАТУС_ПАПОК="только в телефоне"; нарисоватьСтатусПапок();
-    });
+    ждёмКанал().then(function(){
+      return взятьРаскладкуИзТГ().then(function(ок){
+        if(ок){нарисоватьСтатусПапок();return}
+        if(ВРЕМЯ_РАСКЛАДКИ>0){сохранитьРаскладкуВТГ();return}
+        СТАТУС_ПАПОК="только в телефоне"; нарисоватьСтатусПапок();
+      });
+    }).catch(function(){});
     $("выбор-раскладки").onchange=function(e){if(e.target.files&&e.target.files[0])загрузитьРаскладкуИзФайла(e.target.files[0])};
     if(нуженТокен()){показатьНастройку();СОСТОЯНИЕ_ТГ="нет ключа";МЕСТО="очередь";нарисоватьСостояние();}
     else{выбратьМесто()}
@@ -2598,7 +2820,7 @@ window.ХРАНИЛИЩЕ={папки:function(){return ПАПКИ},раскла
   статус:function(){return СТАТУС_ПАПОК},время:function(){return ВРЕМЯ_РАСКЛАДКИ},
   место:function(){return МЕСТО},состояниеТГ:function(){return СОСТОЯНИЕ_ТГ},
   проверитьМесто:выбратьМесто,очередь:очередьВсе,вОчередь:вОчередь,
-  запомнить:запомнить,перенестиВсёВ:перенестиВсёВ,правила:применитьПравила,папкаПоПравилу:папкаПоПравилу,проверка:полнаяПроверка,строкаИтога:строкаИтога,дослать:дослатьНедостающее,запустить:запуститьФайлы,повтор:повторЛи,разделить:разделитьНаНовые,гдеМои:гдеМои,моихФайлов:моихФайлов,партия:запуститьПартию,разовоВФото:разовоВФото,обновитьПомеченные:обновитьПомеченные,приложения:приложения,запуститьПриложение:запуститьПриложение,показатьПриложения:показатьПриложения,память:памятьПриложения,показатьПамять:показатьПамять,очиститьОчередь:очиститьОчередь,строка:строкиФайла,убратьМусор:убратьМусорИзЧата,fileIdИзСообщения:fileIdИзСообщения,списокФайлом:записатьСписокФайлом,режимСписка:режимСписка,поставитьРежим:поставитьРежим,текстСписка:текстСпискаФайлом,разобратьСписок:разобратьСписокИзТекста,починить:починитьПапки,цифры:цифрыПамяти,страховка:сохранитьВсёВТГ,изСтраховки:взятьВсёИзТГ,разобратьИндекс:разобратьИндекс,дописать:дописатьИндекс,список:списокДляФайла,счётВ:счётВ,разложить:разложитьПоТипам,собратьZip:собратьZip,скачатьНабор:скачатьНабор,выбранные:function(){return выбранные},включитьВыбор:включитьВыбор,режим:function(){return режимВыбора},выбранныеФайлы:выбранныеФайлы,
+  запомнить:запомнить,перенестиВсёВ:перенестиВсёВ,правила:применитьПравила,папкаПоПравилу:папкаПоПравилу,проверка:полнаяПроверка,строкаИтога:строкаИтога,дослать:дослатьНедостающее,запустить:запуститьФайлы,повтор:повторЛи,разделить:разделитьНаНовые,гдеМои:гдеМои,моихФайлов:моихФайлов,партия:запуститьПартию,разовоВФото:разовоВФото,обновитьПомеченные:обновитьПомеченные,приложения:приложения,запуститьПриложение:запуститьПриложение,показатьПриложения:показатьПриложения,память:памятьПриложения,показатьПамять:показатьПамять,очиститьОчередь:очиститьОчередь,строка:строкиФайла,убратьМусор:убратьМусорИзЧата,fileIdИзСообщения:fileIdИзСообщения,списокФайлом:записатьСписокФайлом,режимСписка:режимСписка,поставитьРежим:поставитьРежим,текстСписка:текстСпискаФайлом,разобратьСписок:разобратьСписокИзТекста,починить:починитьПапки,показатьКанал:показатьКанал,найтиКанал:найтиКанал,перенестиВКанал:перенестиВсёВКанал,канал:function(){return КАНАЛ},поставитьКанал:поставитьКанал,сообщитьКаналВЛС:сообщитьКаналВЛС,узнатьКаналИзЛС:узнатьКаналИзЛС,цифры:цифрыПамяти,страховка:сохранитьВсёВТГ,изСтраховки:взятьВсёИзТГ,разобратьИндекс:разобратьИндекс,дописать:дописатьИндекс,список:списокДляФайла,счётВ:счётВ,разложить:разложитьПоТипам,собратьZip:собратьZip,скачатьНабор:скачатьНабор,выбранные:function(){return выбранные},включитьВыбор:включитьВыбор,режим:function(){return режимВыбора},выбранныеФайлы:выбранныеФайлы,
   отправитьОчередь:отправитьОчередь,прочестьЧасть:прочестьЧасть,сохранитьВТГ:сохранитьРаскладкуВТГ,разобрать:разобратьТекстРаскладки,собрать:собратьТекстРаскладки,очередьУдалить:очередьУдалить,сохранитьТокен:сохранитьТокен,естьТокен:function(){return !!ТОКЕН},объединить:объединитьПамять};
 if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",старт)}else{старт()}
 setTimeout(function(){
