@@ -68,7 +68,7 @@ footer button{flex:1}
 </style></head><body>
 
 <header>
-  <h1><span>ХРАНИЛИЩЕ <span style="font-size:11px;color:#8b97a8">v3.7</span> <span id="ключ-кнопка" style="font-size:12px;color:#7fb2ff;border:1px solid #2b3546;border-radius:8px;padding:1px 7px">🔑 ключ</span></span><span id="связь" style="font-size:11px;color:var(--dim)">проверяю…</span></h1>
+  <h1><span>ХРАНИЛИЩЕ <span style="font-size:11px;color:#8b97a8">v3.8</span> <span id="ключ-кнопка" style="font-size:12px;color:#7fb2ff;border:1px solid #2b3546;border-radius:8px;padding:1px 7px">🔑 ключ</span></span><span id="связь" style="font-size:11px;color:var(--dim)">проверяю…</span></h1>
   <div class="sub" id="счёт">загрузка…</div>
   <input id="поиск" type="search" placeholder="поиск: имя, тег…" autocomplete="off">
   <div class="row">
@@ -80,6 +80,7 @@ footer button{flex:1}
   </div>
   <div class="row" id="папки"></div>
   <div class="row" id="ряд-скачать" style="gap:8px;overflow:visible">
+    <button id="кнопка-вфото" style="flex:0 0 auto;padding:8px 10px;font-size:12px;background:#1e3a30;color:#8fe3bd">📦 в «Фото» (0)</button>
     <button id="кнопка-выбор" style="flex:0 0 auto;padding:8px 10px;font-size:12px">☑ выбрать</button>
     <button id="ск-папка" style="flex:1;padding:8px 10px;font-size:12px">⬇ папку (0)</button>
     <button id="ск-всё" class="g" style="flex:1;padding:8px 10px;font-size:12px">⬇ всё (0)</button>
@@ -1894,6 +1895,15 @@ function применитьВыборККарточкам(){
 function подходитПоФильтру(ф){return подходит(ф)}
 
 function обновитьСчётчики(){
+  try{
+    var кв=$("кнопка-вфото");
+    if(кв){
+      var г=гдеМои();
+      var осталось=г.моих-г.вФото;
+      кв.textContent="📦 в «Фото» ("+осталось+")";
+      кв.style.display=осталось>0?"block":"none";
+    }
+  }catch(e){}
   var ф=выбранныеФайлы().length;
   var кн=$("ск-всё"), кп=$("ск-папка");
   if(кн)кн.textContent="⬇ всё ("+ВСЕ.length+")";
@@ -2147,6 +2157,15 @@ function старт(){
     var кк=$("ключ-кнопка");
     if(кк)кк.onclick=function(){показатьНастройку()};
 
+    $("кнопка-вфото").onclick=function(){
+      var п=разовоВФото(), г=гдеМои();
+      нарисоватьПапки(); нарисовать();
+      var т="перенёс в «Фото»: "+п+" · моих всего: "+г.моих+" · в «Фото»: "+г.вФото+
+        " · в других папках: "+г.вДругих+" · без папки: "+г.безПапки;
+      показатьБаннер(т);
+      if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(т);
+      setTimeout(function(){var б=$("баннер");if(б)б.style.display="none"},15000);
+    };
     $("кнопка-выбор").onclick=function(){включитьВыбор(!режимВыбора)};
     $("выб-снять").onclick=function(){выбранные={};применитьВыборККарточкам()};
     $("выб-всё").onclick=function(){
@@ -2177,6 +2196,17 @@ function старт(){
     объединитьПамять();
     try{ починитьПапки() }catch(e){}
     try{ применитьПравила(); нарисоватьПапки(); нарисовать(); }catch(e){}
+    // один раз при открытии: все мои файлы → «Фото»
+    try{
+      var пФ=разовоВФото();
+      if(пФ){
+        нарисоватьПапки(); нарисовать();
+        var гФ=гдеМои();
+        var тФ="само перенесло в «Фото»: "+пФ+" · теперь в «Фото»: "+гФ.вФото+" из "+гФ.моих+" моих";
+        показатьБаннер(тФ);
+        setTimeout(function(){var б=$("баннер");if(б)б.style.display="none"},12000);
+      }
+    }catch(e){}
     // если Telegram отвечает — сами подтягиваем список файлов из чата, чтобы всё было видно на любом устройстве
     if(ТОКЕН){
       setTimeout(function(){
