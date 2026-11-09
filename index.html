@@ -68,7 +68,7 @@ footer button{flex:1}
 </style></head><body>
 
 <header>
-  <h1><span>ХРАНИЛИЩЕ <span style="font-size:11px;color:#8b97a8">v4.8</span> <span id="ключ-кнопка" style="font-size:12px;color:#7fb2ff;border:1px solid #2b3546;border-radius:8px;padding:1px 7px">🔑 ключ</span></span><span id="связь" style="font-size:11px;color:var(--dim)">проверяю…</span></h1>
+  <h1><span>ХРАНИЛИЩЕ <span style="font-size:11px;color:#8b97a8">v4.9</span> <span id="ключ-кнопка" style="font-size:12px;color:#7fb2ff;border:1px solid #2b3546;border-radius:8px;padding:1px 7px">🔑 ключ</span></span><span id="связь" style="font-size:11px;color:var(--dim)">проверяю…</span></h1>
   <div class="sub" id="счёт">загрузка…</div>
   <input id="поиск" type="search" placeholder="поиск: имя, тег…" autocomplete="off">
   <div class="row">
@@ -1566,8 +1566,11 @@ function взятьВсёИзТГ(){
         папок=разобратьТекстРаскладки(текстыР.replace(/^LAYOUT\d\|/, "LAYOUT2|"), "");
       }
       объединитьПамять(); применитьПравила(); нарисоватьПапки(); нарисовать();
-      показатьБаннер("взято из Telegram: файлов добавлено "+файлов+" · всего "+ВСЕ.length+
-        " · папок "+(папок?ПАПКИ.length:"не найдено"));
+      // Баннер только когда реально что-то изменилось: иначе нечего показывать.
+      if(файлов>0){
+        показатьБаннер("из Telegram добавлено файлов: "+файлов+" · всего "+ВСЕ.length);
+        setTimeout(function(){var б=$("баннер");if(б)б.style.display="none"},6000);
+      }
       return {файлов:файлов, папок:папок};
     });
   }).catch(function(){return false});
@@ -2807,8 +2810,10 @@ function старт(){
           взятьВсёИзТГ().then(function(р){
             if(р&&р.файлов){
               нарисовать(); нарисоватьПапки();
-              показатьБаннер("подтянул из Telegram: "+р.файлов+" файлов · всего на экране "+ВСЕ.length);
-              setTimeout(function(){var б=$("баннер");if(б)б.style.display="none"},6000);
+              if(р.файлов>0){
+                показатьБаннер("подтянул из Telegram: "+р.файлов+" файлов · всего "+ВСЕ.length);
+                setTimeout(function(){var б=$("баннер");if(б)б.style.display="none"},6000);
+              }
             }
             return дослатьНедостающее();
           }).then(function(дослано){
