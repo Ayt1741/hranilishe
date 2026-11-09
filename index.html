@@ -54,6 +54,8 @@ footer button{flex:1 1 45%;min-width:140px}
 #список.режим .f{padding-right:44px}
 #список.плитка{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
 #список.плитка .f{margin:0}
+#список.галерея{grid-template-columns:repeat(auto-fill,minmax(130px,1fr))}
+#список.галерея .мин{height:130px}
 #список.плитка .bar{flex-direction:column}
 #список.плитка .bar button{width:100%}
 .галка{display:none;position:absolute;top:10px;right:10px;width:24px;height:24px;border-radius:50%;
@@ -72,7 +74,7 @@ footer button{flex:1 1 45%;min-width:140px}
 </style></head><body>
 
 <header>
-  <h1><span>ХРАНИЛИЩЕ <span style="font-size:11px;color:#8b97a8">v5.4</span> <span id="ключ-кнопка" style="font-size:12px;color:#7fb2ff;border:1px solid #2b3546;border-radius:8px;padding:1px 7px">🔑 ключ</span></span><span id="связь" style="font-size:11px;color:var(--dim)">проверяю…</span></h1>
+  <h1><span>ХРАНИЛИЩЕ <span style="font-size:11px;color:#8b97a8">v6.0</span> <span id="ключ-кнопка" style="font-size:12px;color:#7fb2ff;border:1px solid #2b3546;border-radius:8px;padding:1px 7px">🔑 ключ</span></span><span id="связь" style="font-size:11px;color:var(--dim)">проверяю…</span></h1>
   <div class="sub" id="счёт">загрузка…</div>
   <input id="поиск" type="search" placeholder="поиск: имя, тег…" autocomplete="off">
   <div class="row">
@@ -90,6 +92,10 @@ footer button{flex:1 1 45%;min-width:140px}
     <button id="ск-всё" class="g" style="flex:1;padding:8px 10px;font-size:12px">⬇ всё (0)</button>
   </div>
   <div class="sub" id="статус-папок" style="font-size:11px">папки: только в телефоне</div>
+  <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+    <button id="корзина-кн" style="flex:1;font-size:12px;padding:6px 8px">🗑 корзина</button>
+    <button id="служебное" style="flex:1.3;font-size:12px;padding:6px 8px">👁 мусор виден</button>
+  </div>
   <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
     <button id="сорт" style="flex:1;font-size:12px;padding:6px 8px">⇅ по дате</button>
     <button id="вид" style="flex:1;font-size:12px;padding:6px 8px">▤ список</button>
@@ -2206,13 +2212,19 @@ function подходит(ф){
   if(фильтр==="склад" && ф.о!=="склад" && ф.о!=="телефон")return false;
   if(фильтр==="телефон" && ф.о!=="телефон")return false;
   if(фильтр==="exe" && !/\.(exe|apk|msi|zip|bat|cmd)$/i.test(ф.и))return false;
+  if(фильтр==="корзина" && !вКорзине(ф))return false;
+  if(фильтр!=="корзина" && вКорзине(ф))return false;
+  if(скрытьСлужебное() && фильтр!=="корзина" && СЛУЖЕБНЫЕ.test(ф.и||""))return false;
   if(!q)return true;
   return (ф.и+" "+(ф.т||"")).toLowerCase().indexOf(q)>=0;
 }
 function нарисовать(){
   var с=$("список"), найдено=[], i, ф, html=[];
   объединитьПамять();
-  for(i=0;i<ВСЕ.length;i++){ф=ВСЕ[i];if(подходит(ф))найдено.push(i)}
+  for(i=0;i<ВСЕ.length;i++){ф=ВСЕ[i];if(подходит(ф)){
+    if(ВИД==="галерея" && !этоImage(ф))continue;
+    найдено.push(i)}
+  }
   var моих=ВСЕ.length-встроенныхВСписке();
   $("счёт").textContent="всего "+ВСЕ.length+" = моих "+моих+" + встроенных "+встроенныхВСписке()+
     " · на экране "+найдено.length;
@@ -2223,9 +2235,10 @@ function нарисовать(){
     var A=ВСЕ[a], B=ВСЕ[b];
     if(СОРТ==="имя")return String(A.и||"").localeCompare(String(B.и||""),"ru");
     if(СОРТ==="размер")return (B.р||0)-(A.р||0);
+    if(ВИД==="галерея")return 0;
     return (B.д||0)-(A.д||0);
   });
-  с.className = (ВИД==="плитка") ? "плитка" : "";
+  с.className = (ВИД==="плитка") ? "плитка" : (ВИД==="галерея" ? "плитка галерея" : "");
   var до=Math.min(найдено.length,300);
   for(i=0;i<до;i++){
     var и=найдено[i], f=ВСЕ[и];
@@ -2233,6 +2246,7 @@ function нарисовать(){
     var вОч=(f.о==="очередь");
     var выбр=!!выбранные[ключВыбора(f)];
     html.push('<div class="f'+(выбр?' выбр':'')+'" data-и="'+и+'"'+(вОч?' style="border-color:#ffb020"':'')+'>'+
+      (ВИД!=="список" ? '<div class="мин" data-мин="'+ключКорзины(f)+'" style="width:100%;height:110px;border-radius:8px;overflow:hidden;background:#1a2230;display:flex;align-items:center;justify-content:center;font-size:22px">'+(этоImage(f)?"🖼":"📄")+'</div>' : '')+
       '<div class="галка">✓</div><div class="nm"'+(этоImage(f)?' style="cursor:zoom-in"':'')+' data-пр="'+и+'">'+f.и.replace(/[<>&]/g,"")+'</div>'+
       '<div class="mt"><span>'+размер(f.р)+'</span><span>'+дата(f.д)+'</span>'+
       '<span class="tag"'+(вОч?' style="color:#ffb020"':'')+'>'+(вОч?"в очереди, ждёт Телеграм":(f.о||"склад"))+""+'</span>'+
@@ -2241,15 +2255,23 @@ function нарисовать(){
       '<div class="bar">'+(вОч?
         ('<button class="p" data-соч="'+и+'">Сохранить на телефон</button><button data-уоч="'+и+'">Убрать</button>')
         :
-        ('<button class="p" data-с="'+и+'">Скачать</button><button data-ш="'+и+'">Ссылка</button><button data-пк="'+и+'">В папку</button>')
+        (фильтр==="корзина"
+          ? ('<button class="p" data-верн="'+и+'">Вернуть</button><button data-навсег="'+и+'">Удалить навсегда</button>')
+          : ('<button class="p" data-с="'+и+'">Скачать</button><button data-ш="'+и+'">Ссылка</button><button data-пк="'+и+'">В папку</button><button data-тр="'+и+'" title="в корзину">🗑</button>'))
       )+'</div></div>');
   }
   if(найдено.length>до)html.push('<div class="empty">показаны первые '+до+' из '+найдено.length+' — уточни поиск</div>');
   с.innerHTML=html.join("");
+  с.querySelectorAll("[data-тр]").forEach(function(к){к.onclick=function(e){e.stopPropagation();вКорзину(ВСЕ[+к.dataset.тр])}});
+  с.querySelectorAll("[data-верн]").forEach(function(к){к.onclick=function(e){e.stopPropagation();изКорзины(ВСЕ[+к.dataset.верн])}});
+  с.querySelectorAll("[data-навсег]").forEach(function(к){к.onclick=function(e){e.stopPropagation();удалитьНавсегда(ВСЕ[+к.dataset.навсег])}});
+  if(ВИД!=="список"){
+    for(var мi=0;мi<до;мi++){ var фм=ВСЕ[найдено[мi]]; if(этоImage(фм))миниатюра(фм) }
+  }
   с.querySelectorAll("[data-пр]").forEach(function(к){
     к.onclick=function(e){
       var ф=ВСЕ[+к.dataset.пр];
-      if(этоImage(ф)){e.stopPropagation();превью(ф)}
+      if(этоImage(ф)||этоМедиа(ф)){e.stopPropagation();превью(ф)}
     };
   });
   с.querySelectorAll("[data-с]").forEach(function(к){к.onclick=function(){скачать(ВСЕ[+к.dataset.с])}});
@@ -2973,6 +2995,8 @@ function старт(){
     var кс2=$("сорт"); if(кс2){кс2.onclick=сменитьСорт; кс2.textContent="⇅ по "+(СОРТ==="дата"?"дате":(СОРТ==="имя"?"имени":"размеру"))}
     var кв=$("вид"); if(кв){кв.onclick=сменитьВид; кв.textContent=ВИД==="плитка"?"▦ плитка":"▤ список"}
     var ко2=$("объём"); if(ко2)ко2.onclick=показатьОбъём;
+    var кк2=$("корзина-кн"); if(кк2)кк2.onclick=режимКорзина;
+    var ксл=$("служебное"); if(ксл){ксл.onclick=переключитьСлужебное; ксл.textContent=скрытьСлужебное()?"🚫 мусор скрыт":"👁 мусор виден"}
     var кс=$("ссылка-папки"); if(кс)кс.onclick=function(){
       if(прочестьПубличный()){соСсылкойБезКлюча();return}
       var и=(активПапка&&активПапка!==БЕЗ)?активПапка:"";
@@ -3095,6 +3119,64 @@ function публиковатьПапку(имя){
   });
 }
 
+/* ================= корзина, служебные файлы, галерея ================= */
+function прочестьКорзину(){
+  try{ return JSON.parse(localStorage.getItem("корзина")||"{}") }catch(e){ return {} }
+}
+function сохранитьКорзину(к){ try{ localStorage.setItem("корзина",JSON.stringify(к)) }catch(e){} }
+function ключКорзины(ф){ return (ф.и||"")+"|"+(ф.р||0)+"|"+(ф.мсг||0) }
+function вКорзине(ф){ return !!прочестьКорзину()[ключКорзины(ф)] }
+function вКорзину(ф){
+  var к=прочестьКорзину(); к[ключКорзины(ф)]={и:ф.и,р:ф.р,мсг:ф.мсг||0,когда:Date.now(),запись:ф};
+  сохранитьКорзину(к); нарисовать();
+  показатьБаннер("«"+(ф.и||"")+"» в корзине. Файл в Telegram цел — удалить можно кнопкой в корзине.");
+  setTimeout(function(){var б=$("баннер");if(б)б.style.display="none"},6000);
+}
+function изКорзины(ф){
+  var к=прочестьКорзину(); delete к[ключКорзины(ф)]; сохранитьКорзину(к); нарисовать();
+  показатьБаннер("возвращено из корзины: "+(ф.и||""));
+  setTimeout(function(){var б=$("баннер");if(б)б.style.display="none"},4000);
+}
+function удалитьНавсегда(ф){
+  if(!confirm("Удалить «"+(ф.и||"")+"» из Telegram навсегда? Восстановить будет нельзя."))return;
+  var чат=ф.чат||ЧАТ_ДЛЯ_ПОИСКА;
+  var сделать=ф.мсг ? тг("deleteMessage",{chat_id:чат,message_id:ф.мсг}).catch(function(){return {ok:false}}) : Promise.resolve({ok:true});
+  сделать.then(function(){
+    var к=прочестьКорзину(); delete к[ключКорзины(ф)]; сохранитьКорзину(к);
+    ВСЕ=ВСЕ.filter(function(х){return ключКорзины(х)!==ключКорзины(ф)});
+    нарисовать(); показатьБаннер("удалено: "+(ф.и||""));
+    setTimeout(function(){var б=$("баннер");if(б)б.style.display="none"},4000);
+  });
+}
+function режимКорзина(){
+  фильтр = (фильтр==="корзина") ? "все" : "корзина";
+  нарисовать();
+  if(фильтр==="корзина")показатьБаннер("показана корзина: файлы в Telegram целы, пока не нажмёшь «удалить навсегда»");
+}
+
+/* файлы флота и служебный мусор */
+var СЛУЖЕБНЫЕ=/\.(part|jsonl|hyb|cache-\d+|cache|bin|log|tmp)$|^shard-|^\u0447\d+$|^поток\.part$|^file_[0-9a-f]+\.bin$/i;
+function скрытьСлужебное(){ try{ return localStorage.getItem("скрыть-служебное")==="1" }catch(e){ return false } }
+function переключитьСлужебное(){
+  var в=!скрытьСлужебное();
+  try{localStorage.setItem("скрыть-служебное",в?"1":"0")}catch(e){}
+  var к=$("служебное"); if(к)к.textContent = в ? "🚫 мусор скрыт" : "👁 мусор виден";
+  нарисовать();
+}
+
+/* миниатюры картинок (для плитки и галереи) */
+var МИНИАТЮРЫ={};
+function миниатюра(ф){
+  var к=ключКорзины(ф);
+  if(МИНИАТЮРЫ[к])return;
+  МИНИАТЮРЫ[к]="-";
+  ссылкаНа(ф).then(function(url){
+    МИНИАТЮРЫ[к]=url;
+    var узлы=document.querySelectorAll('[data-мин="'+CSS.escape(к)+'"]');
+    узлы.forEach(function(у){ у.innerHTML='<img src="'+url+'" style="width:100%;height:100%;object-fit:cover">' });
+  }).catch(function(){ МИНИАТЮРЫ[к]="" });
+}
+
 /* ================= сортировка, вид, объём, превью ================= */
 var СОРТ="дата", ВИД="список";
 try{ СОРТ=localStorage.getItem("сорт")||"дата"; ВИД=localStorage.getItem("вид")||"список" }catch(e){}
@@ -3106,9 +3188,9 @@ function сменитьСорт(){
   нарисовать();
 }
 function сменитьВид(){
-  ВИД = ВИД==="список" ? "плитка" : "список";
+  ВИД = ВИД==="список" ? "плитка" : (ВИД==="плитка" ? "галерея" : "список");
   try{localStorage.setItem("вид",ВИД)}catch(e){}
-  var к=$("вид"); if(к)к.textContent = ВИД==="плитка" ? "▦ плитка" : "▤ список";
+  var к=$("вид"); if(к)к.textContent = ВИД==="плитка" ? "▦ плитка" : (ВИД==="галерея" ? "🖼 галерея" : "▤ список");
   нарисовать();
 }
 function показатьОбъём(){
@@ -3117,6 +3199,10 @@ function показатьОбъём(){
   показатьБаннер("объём: всего "+размер(всего)+" · твоих файлов "+размер(моих)+
     " · файлов "+ВСЕ.length+" · частей в Telegram: "+ВСЕ.reduce(function(a,ф){return a+(ф.ч||1)},0));
   setTimeout(function(){var б=$("баннер");if(б)б.style.display="none"},10000);
+}
+function этоМедиа(ф){
+  var т=(ф.т||"").toLowerCase(), и=(ф.и||"").toLowerCase();
+  return т.indexOf("video/")===0||т.indexOf("audio/")===0||/\.(mp4|m4v|mov|webm|mkv|mp3|m4a|ogg|opus|wav|flac)$/.test(и);
 }
 function этоImage(ф){
   var т=(ф.т||"").toLowerCase(), и=(ф.и||"").toLowerCase();
@@ -3130,8 +3216,22 @@ function превью(ф){
     var окно=document.createElement("div");
     окно.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:99;display:flex;"+
       "align-items:center;justify-content:center;flex-direction:column;gap:10px;padding:16px";
-    var img=document.createElement("img");
-    img.src=url; img.style.cssText="max-width:100%;max-height:85vh;border-radius:10px";
+    var тип=(ф.т||"").toLowerCase(), имян=(ф.и||"").toLowerCase();
+    var это_видео=тип.indexOf("video/")===0||/\.(mp4|m4v|mov|webm|mkv)$/.test(имян);
+    var это_звук=тип.indexOf("audio/")===0||/\.(mp3|m4a|ogg|opus|wav|flac)$/.test(имян);
+    var img;
+    if(это_видео){
+      img=document.createElement("video");
+      img.controls=true; img.autoplay=true; img.src=url;
+      img.style.cssText="max-width:100%;max-height:85vh;border-radius:10px";
+    }else if(это_звук){
+      img=document.createElement("audio");
+      img.controls=true; img.autoplay=true; img.src=url;
+      img.style.cssText="width:min(520px,90vw)";
+    }else{
+      img=document.createElement("img");
+      img.src=url; img.style.cssText="max-width:100%;max-height:85vh;border-radius:10px";
+    }
     var низ=document.createElement("div");
     низ.style.cssText="color:#cfd6e4;font-size:13px;text-align:center";
     низ.textContent=ф.и+" · "+размер(ф.р)+" · нажми, чтобы закрыть";
@@ -3273,15 +3373,32 @@ function прочестьСсылку(){
     п[кл]=decodeURIComponent(к.slice(1).join("=")||"");
   }
   if(п["к"]&&сохранитьТокен(п["к"])){ ТОКЕН=п["к"]; }
+  if(п["пw"]){
+    var спросить=prompt("Эта папка под паролем. Введи пароль:","");
+    if(!спросить || хешПароля(спросить)!==п["пw"]){
+      alert("Пароль не подошёл — доступ закрыт.");
+      document.body.innerHTML='<div style="padding:40px;color:#cfd6e4;font-family:system-ui">Доступ закрыт: неверный пароль.</div>';
+      return null;
+    }
+    п.__пароль="ок";
+  }
   if(п["п"]){ активПапка=п["п"]; п.__толькоПапка=true; }
   return п;
 }
 
+function хешПароля(т){
+  var ч=0, i; т=String(т||"");
+  for(i=0;i<т.length;i++){ч=(ч*31+т.charCodeAt(i))|0}
+  return Math.abs(ч).toString(36);
+}
 function ссылкаНаПапку(имя){
   имя=имя||((активПапка&&активПапка!==БЕЗ)?активПапка:"");
   if(!имя){показатьБаннер("сначала открой папку — ссылка делается на папку");return}
   if(!ТОКЕН){показатьБаннер("сначала введи ключ бота");показатьНастройку();return}
-  var ссылка=location.origin+location.pathname+"#п="+encodeURIComponent(имя)+"&к="+encodeURIComponent(ТОКЕН);
+  var пароль=prompt("Пароль на ссылку (можно оставить пустым — тогда ссылка без пароля):","");
+  if(пароль===null)return;
+  var хв=пароль?("&пw="+хешПароля(пароль)):"";
+  var ссылка=location.origin+location.pathname+"#п="+encodeURIComponent(имя)+"&к="+encodeURIComponent(ТОКЕН)+хв;
   обещатьКопию(ссылка);
   показатьБаннер("ссылка на папку «"+имя+"» скопирована · в ней "+счётВ(имя)+" файлов. "+
     "ВНИМАНИЕ: по ссылке открывается доступ к хранилищу — давай только своим.");
