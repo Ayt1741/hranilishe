@@ -7,6 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="Хранилище">
 <meta name="theme-color" content="#0e1116">
 <title>ХРАНИЛИЩЕ</title>
+<link rel="manifest" href='data:application/manifest+json,{"name":"ХРАНИЛИЩЕ","short_name":"Хранилище","start_url":"./","display":"standalone","background_color":"%230e1116","theme_color":"%230e1116","icons":[{"src":"data:image/svg%2Bxml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Crect width=%27100%27 height=%27100%27 rx=%2720%27 fill=%27%232b6cff%27/%3E%3Ctext x=%2750%27 y=%2766%27 font-size=%2755%27 text-anchor=%27middle%27%3E%D0%A5%3C/text%3E%3C/svg%3E","sizes":"any","type":"image/svg+xml"}]}'>
 <style>
 :root{--bg:#0e1116;--card:#171c24;--line:#242c38;--txt:#e8edf5;--dim:#8b97a8;--acc:#4f8cff;--ok:#33c48d;--err:#ff5d5d}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -74,7 +75,7 @@ footer button{flex:1 1 45%;min-width:140px}
 </style></head><body>
 
 <header>
-  <h1><span>ХРАНИЛИЩЕ <span style="font-size:11px;color:#8b97a8">v6.0</span> <span id="ключ-кнопка" style="font-size:12px;color:#7fb2ff;border:1px solid #2b3546;border-radius:8px;padding:1px 7px">🔑 ключ</span></span><span id="связь" style="font-size:11px;color:var(--dim)">проверяю…</span></h1>
+  <h1><span>ХРАНИЛИЩЕ <span style="font-size:11px;color:#8b97a8">v6.1</span> <span id="ключ-кнопка" style="font-size:12px;color:#7fb2ff;border:1px solid #2b3546;border-radius:8px;padding:1px 7px">🔑 ключ</span></span><span id="связь" style="font-size:11px;color:var(--dim)">проверяю…</span></h1>
   <div class="sub" id="счёт">загрузка…</div>
   <input id="поиск" type="search" placeholder="поиск: имя, тег…" autocomplete="off">
   <div class="row">
@@ -93,6 +94,8 @@ footer button{flex:1 1 45%;min-width:140px}
   </div>
   <div class="sub" id="статус-папок" style="font-size:11px">папки: только в телефоне</div>
   <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+    <button id="избранное-кн" style="flex:1;font-size:12px;padding:6px 8px">⭐ избранное</button>
+    <button id="стат" style="flex:1;font-size:12px;padding:6px 8px">📊 статистика</button>
     <button id="корзина-кн" style="flex:1;font-size:12px;padding:6px 8px">🗑 корзина</button>
     <button id="служебное" style="flex:1.3;font-size:12px;padding:6px 8px">👁 мусор виден</button>
   </div>
@@ -153,6 +156,8 @@ footer button{flex:1 1 45%;min-width:140px}
   padding:9px 12px calc(9px + env(safe-area-inset-bottom))">
   <button id="выб-снять">Снять</button>
   <button id="выб-всё">Все</button>
+  <button id="выб-папка">В папку</button>
+  <button id="выб-корзина">В корзину</button>
   <button class="p" id="выб-скачать" style="flex:1.4">Скачать (0)</button>
 </div>
 <footer id="подвал-главный">
@@ -2212,6 +2217,7 @@ function подходит(ф){
   if(фильтр==="склад" && ф.о!=="склад" && ф.о!=="телефон")return false;
   if(фильтр==="телефон" && ф.о!=="телефон")return false;
   if(фильтр==="exe" && !/\.(exe|apk|msi|zip|bat|cmd)$/i.test(ф.и))return false;
+  if(фильтр==="избранное" && !вИзбранном(ф))return false;
   if(фильтр==="корзина" && !вКорзине(ф))return false;
   if(фильтр!=="корзина" && вКорзине(ф))return false;
   if(скрытьСлужебное() && фильтр!=="корзина" && СЛУЖЕБНЫЕ.test(ф.и||""))return false;
@@ -2238,7 +2244,7 @@ function нарисовать(){
     if(ВИД==="галерея")return 0;
     return (B.д||0)-(A.д||0);
   });
-  с.className = (ВИД==="плитка") ? "плитка" : (ВИД==="галерея" ? "плитка галерея" : "");
+  с.className = ((ВИД==="плитка") ? "плитка" : (ВИД==="галерея" ? "плитка галерея" : "")) + (режимВыбора ? " режим" : "");
   var до=Math.min(найдено.length,300);
   for(i=0;i<до;i++){
     var и=найдено[i], f=ВСЕ[и];
@@ -2257,11 +2263,12 @@ function нарисовать(){
         :
         (фильтр==="корзина"
           ? ('<button class="p" data-верн="'+и+'">Вернуть</button><button data-навсег="'+и+'">Удалить навсегда</button>')
-          : ('<button class="p" data-с="'+и+'">Скачать</button><button data-ш="'+и+'">Ссылка</button><button data-пк="'+и+'">В папку</button><button data-тр="'+и+'" title="в корзину">🗑</button>'))
+          : ('<button class="p" data-с="'+и+'">Скачать</button><button data-ш="'+и+'">Ссылка</button><button data-пк="'+и+'">В папку</button><button data-изб="'+и+'" title="в избранное">'+(вИзбранном(f)?'★':'☆')+'</button><button data-тр="'+и+'" title="в корзину">🗑</button>'))
       )+'</div></div>');
   }
   if(найдено.length>до)html.push('<div class="empty">показаны первые '+до+' из '+найдено.length+' — уточни поиск</div>');
   с.innerHTML=html.join("");
+  с.querySelectorAll("[data-изб]").forEach(function(к){к.onclick=function(e){e.stopPropagation();переключитьИзбранное(ВСЕ[+к.dataset.изб])}});
   с.querySelectorAll("[data-тр]").forEach(function(к){к.onclick=function(e){e.stopPropagation();вКорзину(ВСЕ[+к.dataset.тр])}});
   с.querySelectorAll("[data-верн]").forEach(function(к){к.onclick=function(e){e.stopPropagation();изКорзины(ВСЕ[+к.dataset.верн])}});
   с.querySelectorAll("[data-навсег]").forEach(function(к){к.onclick=function(e){e.stopPropagation();удалитьНавсегда(ВСЕ[+к.dataset.навсег])}});
@@ -2996,6 +3003,10 @@ function старт(){
     var кв=$("вид"); if(кв){кв.onclick=сменитьВид; кв.textContent=ВИД==="плитка"?"▦ плитка":"▤ список"}
     var ко2=$("объём"); if(ко2)ко2.onclick=показатьОбъём;
     var кк2=$("корзина-кн"); if(кк2)кк2.onclick=режимКорзина;
+    var ки=$("избранное-кн"); if(ки)ки.onclick=режимИзбранное;
+    var ст=$("стат"); if(ст)ст.onclick=статистика;
+    var вп=$("выб-папка"); if(вп)вп.onclick=выбранноеВПапку;
+    var вк=$("выб-корзина"); if(вк)вк.onclick=выбранноеВКорзину;
     var ксл=$("служебное"); if(ксл){ксл.onclick=переключитьСлужебное; ксл.textContent=скрытьСлужебное()?"🚫 мусор скрыт":"👁 мусор виден"}
     var кс=$("ссылка-папки"); if(кс)кс.onclick=function(){
       if(прочестьПубличный()){соСсылкойБезКлюча();return}
@@ -3117,6 +3128,87 @@ function публиковатьПапку(имя){
     }
     шаг();
   });
+}
+
+/* ================= избранное, статистика, массовые действия ================= */
+function прочестьИзбранное(){
+  try{ return JSON.parse(localStorage.getItem("избранное")||"{}") }catch(e){ return {} }
+}
+function сохранитьИзбранное(и){ try{ localStorage.setItem("избранное",JSON.stringify(и)) }catch(e){} }
+function ключИзбранного(ф){ return (ф.и||"")+"|"+(ф.р||0) }
+function вИзбранном(ф){ return !!прочестьИзбранное()[ключИзбранного(ф)] }
+function переключитьИзбранное(ф){
+  var и=прочестьИзбранное(), к=ключИзбранного(ф);
+  if(и[к])delete и[к]; else и[к]=1;
+  сохранитьИзбранное(и); нарисовать();
+}
+function режимИзбранное(){
+  фильтр = (фильтр==="избранное") ? "все" : "избранное";
+  нарисовать();
+  if(фильтр==="избранное")показатьБаннер("показано избранное: "+Object.keys(прочестьИзбранное()).length);
+}
+
+function статистика(){
+  var по=ВСЕ.filter(function(ф){return !вКорзине(ф)});
+  var типы={}, самый=null, всего=0;
+  по.forEach(function(ф){
+    всего+=(ф.р||0);
+    var р=(ф.и||"").split(".").pop().toLowerCase();
+    if(!р||р.length>6)р="без расширения";
+    типы[р]=типы[р]||{n:0,б:0};
+    типы[р].n++; типы[р].б+=(ф.р||0);
+    if(!самый||(ф.р||0)>(самый.р||0))самый=ф;
+  });
+  var строчки=Object.keys(типы).sort(function(a,b){return типы[b].б-типы[a].б}).slice(0,12);
+  var html='<h3>Статистика хранилища</h3>'+
+    '<div class="подсказка">файлов: '+по.length+' · объём: '+размер(всего)+
+    ' · избранных: '+Object.keys(прочестьИзбранное()).length+
+    ' · в корзине: '+Object.keys(прочестьКорзину()).length+'</div>';
+  строчки.forEach(function(р){
+    var доля=всего?(типы[р].б/всего*100).toFixed(1):0;
+    html+='<div class="подсказка" style="display:flex;justify-content:space-between">'+
+      '<span>'+р+' · '+типы[р].n+' шт</span><span>'+размер(типы[р].б)+' · '+доля+'%</span></div>';
+  });
+  if(самый)html+='<div class="подсказка">самый большой: '+самый.и+' — '+размер(самый.р)+'</div>';
+  html+='<button class="p" data-цсв="1">Экспорт списка в CSV</button>';
+  html+='<button data-закрыть="1">закрыть</button>';
+  var тело=$("шторка-тело"); тело.innerHTML=html; $("шторка").style.display="block";
+  тело.querySelectorAll("[data-цсв]").forEach(function(к){к.onclick=экспортCSV});
+  тело.querySelectorAll("[data-закрыть]").forEach(function(к){к.onclick=закрытьШторку});
+}
+function экспортCSV(){
+  var строки=["имя;размер_байт;дата;папка;частей;источник"];
+  ВСЕ.forEach(function(ф){
+    строки.push([ф.и||"",ф.р||0,ф.д?new Date(ф.д*1000).toISOString().slice(0,10):"",
+      папкаФайла(ф)||"",ф.ч||1,ф.о||""].join(";"));
+  });
+  var блоб=new Blob(["\ufeff"+строки.join("\n")],{type:"text/csv;charset=utf-8"});
+  сохранитьБлоб(блоб,"ХРАНИЛИЩЕ-список-"+new Date().toISOString().slice(0,10)+".csv");
+  показатьБаннер("список сохранён в CSV: "+ВСЕ.length+" строк");
+  setTimeout(function(){var б=$("баннер");if(б)б.style.display="none"},6000);
+}
+
+function выбранноеВПапку(){
+  var ф=выбранныеФайлы(); if(!ф.length){показатьБаннер("сначала отметь файлы");return}
+  var имя=prompt("В какую папку положить отмеченные ("+ф.length+")?","");
+  if(имя===null)return;
+  имя=String(имя||"").trim();
+  ф.forEach(function(х){
+    РАСКЛАДКА[ключР(х)]=имя; РАСКЛАДКА_ИМЯ[ключИ(х)]=имя; х.п=имя;
+  });
+  if(имя)создатьПапку(имя);
+  сохранитьПапки(); нарисовать(); нарисоватьПапки();
+  показатьБаннер("отмеченные файлы ("+ф.length+") → папка «"+(имя||"без папки")+"»");
+  setTimeout(function(){var б=$("баннер");if(б)б.style.display="none"},6000);
+}
+function выбранноеВКорзину(){
+  var ф=выбранныеФайлы(); if(!ф.length){показатьБаннер("сначала отметь файлы");return}
+  if(!confirm("Отправить в корзину "+ф.length+" файлов? В Telegram они останутся."))return;
+  var к=прочестьКорзину();
+  ф.forEach(function(х){к[ключКорзины(х)]={и:х.и,р:х.р,мсг:х.мсг||0,когда:Date.now(),запись:х}});
+  сохранитьКорзину(к); выбранные={}; нарисовать();
+  показатьБаннер("в корзину отправлено: "+ф.length);
+  setTimeout(function(){var б=$("баннер");if(б)б.style.display="none"},5000);
 }
 
 /* ================= корзина, служебные файлы, галерея ================= */
@@ -3510,6 +3602,14 @@ function скачатьЧастями(f){
   шаг();
 }
 
+document.addEventListener("keydown",function(e){
+  var в=document.activeElement, печатает=в&&(в.tagName==="INPUT"||в.tagName==="TEXTAREA");
+  if(e.key==="/"&&!печатает){e.preventDefault();var п=$("поиск");if(п)п.focus();return}
+  if(e.key==="Escape"){
+    var ш=$("шторка"); if(ш&&ш.style.display==="block"){закрытьШторку();return}
+    var п2=$("поиск"); if(п2){п2.value="";нарисовать()}
+  }
+});
 window.addEventListener("error",function(e){показатьБаннер("сбой в приложении: "+(e.message||""))});
 window.ХРАНИЛИЩЕ={папки:function(){return ПАПКИ},раскладка:function(){return РАСКЛАДКА},
   создать:создатьПапку,вПапку:вПапку,разложить:разложитьПоТипам,актив:function(){return активПапка},
