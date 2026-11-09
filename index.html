@@ -34,7 +34,7 @@ input[type=search]:focus{border-color:var(--acc)}
 .н-тело h3{margin:0;font-size:16px}
 .н-т{color:var(--dim);font-size:12.5px;line-height:1.4}
 #поле-токена{padding:12px;border-radius:10px;border:1px solid var(--line);background:#0b0e13;color:var(--txt);font-size:15px;width:100%}
-main{padding:10px 12px}
+main{padding-bottom:130px;padding:10px 12px}
 .f{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:11px 12px;margin-bottom:8px}
 .nm{font-weight:600;font-size:14px;word-break:break-word}
 .mt{color:var(--dim);font-size:12px;margin-top:3px;display:flex;gap:9px;flex-wrap:wrap}
@@ -45,13 +45,17 @@ button.p{background:var(--acc);color:#fff}
 button.g{background:#1e3a30;color:var(--ok)}
 button:disabled{opacity:.45}
 .empty{color:var(--dim);text-align:center;padding:36px 12px}
-footer{position:fixed;bottom:0;left:0;right:0;background:rgba(14,17,22,.98);border-top:1px solid var(--line);
+footer{flex-wrap:wrap;position:fixed;bottom:0;left:0;right:0;background:rgba(14,17,22,.98);border-top:1px solid var(--line);
  padding:9px 12px calc(9px + env(safe-area-inset-bottom));display:flex;gap:8px}
-footer button{flex:1}
+footer button{flex:1 1 45%;min-width:140px}
 #баннер{display:none;margin:8px 12px;padding:10px 12px;border-radius:11px;background:#3a1e1e;border:1px solid #6a2b2b;color:#ffc9c9;font-size:13px}
 @media (max-width:420px){ footer button{padding:9px 8px;font-size:13px} }
 #бар-выбора.on{display:flex}
 #список.режим .f{padding-right:44px}
+#список.плитка{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+#список.плитка .f{margin:0}
+#список.плитка .bar{flex-direction:column}
+#список.плитка .bar button{width:100%}
 .галка{display:none;position:absolute;top:10px;right:10px;width:24px;height:24px;border-radius:50%;
  border:1.5px solid #4a5b73;color:transparent;font-size:14px;line-height:22px;text-align:center;background:#0b1017}
 #список.режим .галка{display:block}
@@ -68,7 +72,7 @@ footer button{flex:1}
 </style></head><body>
 
 <header>
-  <h1><span>ХРАНИЛИЩЕ <span style="font-size:11px;color:#8b97a8">v5.2</span> <span id="ключ-кнопка" style="font-size:12px;color:#7fb2ff;border:1px solid #2b3546;border-radius:8px;padding:1px 7px">🔑 ключ</span></span><span id="связь" style="font-size:11px;color:var(--dim)">проверяю…</span></h1>
+  <h1><span>ХРАНИЛИЩЕ <span style="font-size:11px;color:#8b97a8">v5.4</span> <span id="ключ-кнопка" style="font-size:12px;color:#7fb2ff;border:1px solid #2b3546;border-radius:8px;padding:1px 7px">🔑 ключ</span></span><span id="связь" style="font-size:11px;color:var(--dim)">проверяю…</span></h1>
   <div class="sub" id="счёт">загрузка…</div>
   <input id="поиск" type="search" placeholder="поиск: имя, тег…" autocomplete="off">
   <div class="row">
@@ -86,6 +90,11 @@ footer button{flex:1}
     <button id="ск-всё" class="g" style="flex:1;padding:8px 10px;font-size:12px">⬇ всё (0)</button>
   </div>
   <div class="sub" id="статус-папок" style="font-size:11px">папки: только в телефоне</div>
+  <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+    <button id="сорт" style="flex:1;font-size:12px;padding:6px 8px">⇅ по дате</button>
+    <button id="вид" style="flex:1;font-size:12px;padding:6px 8px">▤ список</button>
+    <button id="объём" style="flex:1.4;font-size:12px;padding:6px 8px">Σ объём</button>
+  </div>
   <div class="sub" id="очередь" style="font-size:12px;display:none"></div>
 </header>
 
@@ -140,16 +149,12 @@ footer button{flex:1}
   <button id="выб-всё">Все</button>
   <button class="p" id="выб-скачать" style="flex:1.4">Скачать (0)</button>
 </div>
-<footer>
-  <button class="p" id="фото">Перенести фото и видео</button>
-  <button class="g" id="файлы">Любые файлы</button>
-</footer>
-<footer>
-  <button class="p" id="дробно" style="flex:1.3">📦 Дроблённая загрузка</button>
+<footer id="подвал-главный">
+  <button class="p" id="фото">📷 Перенести фото и видео</button>
+  <button class="g" id="файлы">📄 Любые файлы</button>
+  <button class="g" id="дробно">📦 Дроблённая загрузка</button>
   <button class="g" id="ссылка-папки">🔗 Ссылка на папку</button>
-</footer>
-<footer>
-  <button id="обход" style="flex:1">🔎 Собрать все мои файлы из канала</button>
+  <button id="обход">🔎 Собрать все мои файлы</button>
 </footer>
 <input type="file" id="выбор" multiple style="display:none">
 <input type="file" id="выбор2" accept="image/*,video/*" multiple style="display:none">
@@ -2213,6 +2218,14 @@ function нарисовать(){
     " · на экране "+найдено.length;
   try{обновитьСчётчики()}catch(e){}
   if(!найдено.length){с.innerHTML='<div class="empty">ничего не найдено</div>';return}
+  // сортировка по выбору
+  найдено.sort(function(a,b){
+    var A=ВСЕ[a], B=ВСЕ[b];
+    if(СОРТ==="имя")return String(A.и||"").localeCompare(String(B.и||""),"ru");
+    if(СОРТ==="размер")return (B.р||0)-(A.р||0);
+    return (B.д||0)-(A.д||0);
+  });
+  с.className = (ВИД==="плитка") ? "плитка" : "";
   var до=Math.min(найдено.length,300);
   for(i=0;i<до;i++){
     var и=найдено[i], f=ВСЕ[и];
@@ -2220,7 +2233,7 @@ function нарисовать(){
     var вОч=(f.о==="очередь");
     var выбр=!!выбранные[ключВыбора(f)];
     html.push('<div class="f'+(выбр?' выбр':'')+'" data-и="'+и+'"'+(вОч?' style="border-color:#ffb020"':'')+'>'+
-      '<div class="галка">✓</div><div class="nm">'+f.и.replace(/[<>&]/g,"")+'</div>'+
+      '<div class="галка">✓</div><div class="nm"'+(этоImage(f)?' style="cursor:zoom-in"':'')+' data-пр="'+и+'">'+f.и.replace(/[<>&]/g,"")+'</div>'+
       '<div class="mt"><span>'+размер(f.р)+'</span><span>'+дата(f.д)+'</span>'+
       '<span class="tag"'+(вОч?' style="color:#ffb020"':'')+'>'+(вОч?"в очереди, ждёт Телеграм":(f.о||"склад"))+""+'</span>'+
       (пф?'<span class="tag" style="color:var(--ok)">📁 '+пф.replace(/[<>&]/g,"")+'</span>':'')+
@@ -2233,6 +2246,12 @@ function нарисовать(){
   }
   if(найдено.length>до)html.push('<div class="empty">показаны первые '+до+' из '+найдено.length+' — уточни поиск</div>');
   с.innerHTML=html.join("");
+  с.querySelectorAll("[data-пр]").forEach(function(к){
+    к.onclick=function(e){
+      var ф=ВСЕ[+к.dataset.пр];
+      if(этоImage(ф)){e.stopPropagation();превью(ф)}
+    };
+  });
   с.querySelectorAll("[data-с]").forEach(function(к){к.onclick=function(){скачать(ВСЕ[+к.dataset.с])}});
   с.querySelectorAll("[data-ш]").forEach(function(к){к.onclick=function(){поделиться(ВСЕ[+к.dataset.ш])}});
   с.querySelectorAll("[data-пк]").forEach(function(к){к.onclick=function(){шторка(ВСЕ[+к.dataset.пк])}});
@@ -2951,6 +2970,9 @@ function старт(){
     $("выбор").onchange=function(e){запуститьФайлы(Array.prototype.slice.call(e.target.files))};
     var кд=$("дробно"); if(кд)кд.onclick=дробноЗагрузить;
     var ко=$("обход"); if(ко)ко.onclick=полныйОбход;
+    var кс2=$("сорт"); if(кс2){кс2.onclick=сменитьСорт; кс2.textContent="⇅ по "+(СОРТ==="дата"?"дате":(СОРТ==="имя"?"имени":"размеру"))}
+    var кв=$("вид"); if(кв){кв.onclick=сменитьВид; кв.textContent=ВИД==="плитка"?"▦ плитка":"▤ список"}
+    var ко2=$("объём"); if(ко2)ко2.onclick=показатьОбъём;
     var кс=$("ссылка-папки"); if(кс)кс.onclick=function(){
       if(прочестьПубличный()){соСсылкойБезКлюча();return}
       var и=(активПапка&&активПапка!==БЕЗ)?активПапка:"";
@@ -3073,6 +3095,52 @@ function публиковатьПапку(имя){
   });
 }
 
+/* ================= сортировка, вид, объём, превью ================= */
+var СОРТ="дата", ВИД="список";
+try{ СОРТ=localStorage.getItem("сорт")||"дата"; ВИД=localStorage.getItem("вид")||"список" }catch(e){}
+
+function сменитьСорт(){
+  СОРТ = СОРТ==="дата" ? "имя" : (СОРТ==="имя" ? "размер" : "дата");
+  try{localStorage.setItem("сорт",СОРТ)}catch(e){}
+  var к=$("сорт"); if(к)к.textContent = "⇅ по "+(СОРТ==="дата"?"дате":(СОРТ==="имя"?"имени":"размеру"));
+  нарисовать();
+}
+function сменитьВид(){
+  ВИД = ВИД==="список" ? "плитка" : "список";
+  try{localStorage.setItem("вид",ВИД)}catch(e){}
+  var к=$("вид"); if(к)к.textContent = ВИД==="плитка" ? "▦ плитка" : "▤ список";
+  нарисовать();
+}
+function показатьОбъём(){
+  var всего=0, моих=0, i, ф;
+  for(i=0;i<ВСЕ.length;i++){ф=ВСЕ[i];всего+=(ф.р||0);if(ф.о!=="встроенный")моих+=(ф.р||0)}
+  показатьБаннер("объём: всего "+размер(всего)+" · твоих файлов "+размер(моих)+
+    " · файлов "+ВСЕ.length+" · частей в Telegram: "+ВСЕ.reduce(function(a,ф){return a+(ф.ч||1)},0));
+  setTimeout(function(){var б=$("баннер");if(б)б.style.display="none"},10000);
+}
+function этоImage(ф){
+  var т=(ф.т||"").toLowerCase(), и=(ф.и||"").toLowerCase();
+  return т.indexOf("image/")===0 || /\.(png|jpe?g|gif|webp|bmp|heic)$/.test(и);
+}
+function превью(ф){
+  if(!ф.f && !ф.мсг){показатьБаннер("у файла нет доступа к просмотру");return}
+  показатьБаннер("открываю «"+ф.и+"»…");
+  ссылкаНа(ф).then(function(url){
+    var б=$("баннер"); if(б)б.style.display="none";
+    var окно=document.createElement("div");
+    окно.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:99;display:flex;"+
+      "align-items:center;justify-content:center;flex-direction:column;gap:10px;padding:16px";
+    var img=document.createElement("img");
+    img.src=url; img.style.cssText="max-width:100%;max-height:85vh;border-radius:10px";
+    var низ=document.createElement("div");
+    низ.style.cssText="color:#cfd6e4;font-size:13px;text-align:center";
+    низ.textContent=ф.и+" · "+размер(ф.р)+" · нажми, чтобы закрыть";
+    окно.appendChild(img); окно.appendChild(низ);
+    окно.onclick=function(){окно.remove()};
+    document.body.appendChild(окно);
+  }).catch(function(e){показатьБаннер("не открылось: "+((e&&e.message)||e))});
+}
+
 /* ================= ПОЛНЫЙ ОБХОД КАНАЛА: вернуть ВСЕ файлы ================= */
 var ЧАТ_ДЛЯ_ПОИСКА="-1003772678641";
 
@@ -3111,43 +3179,84 @@ function прочестьСообщение(ид){
 
 function полныйОбход(){
   if(!ТОКЕН){показатьНастройку();return}
-  if(!confirm("Пройти по каналу и собрать ВСЕ файлы?\nЭто займёт несколько минут: примерно 1 секунда на сообщение.\nНичего не удаляется — только чтение."))return;
+  if(!confirm("Собрать ВСЕ файлы из двух мест: канал «Хранилище» и личный чат с ботом?\n"+
+    "Это займёт 5–10 минут, ничего не удаляется — только чтение.\nМожно закрыть страницу и продолжить позже."))return;
   прогресс(true);
-  var собрано=0, сбоев=0, стоп2=false;
-  верхнийНомер().then(function(верх){
-    var нач=сканДо();
-    if(нач>0&&нач<верх-1){
-      if(!confirm("Прошлый обход остановился на номере "+нач+" из "+верх+".\nПродолжить с этого места?"))нач=0;
-    }else нач=0;
-    var ид=нач+1;
-    function шаг(){
-      if(стоп2||ид>=верх){закончить();return}
-      обновитьПрогресс("номер "+ид+" из "+верх,(ид-нач)/Math.max(1,верх-нач),ид-нач,верх-нач,
-        "найдено файлов: "+собрано);
-      прочестьСообщение(ид).then(function(запись){
-        if(запись){
-          var ключ=ключФайла(запись);
-          запомнить(ключ, запись);
-          if(запись.п){создатьПапку(запись.п);РАСКЛАДКА[ключР(запись)]=запись.п;РАСКЛАДКА_ИМЯ[ключИ(запись)]=запись.п}
-          собрано++;
+  var места=[], всего=0, сбоев=0;
+  var очередьЗадач=ГДЕ_ИСКАТЬ.slice();
+
+  function имяМеста(ид){ return ид==="-1003772678641" ? "канал" : "личный чат" }
+
+  function верхний(чат){
+    return тг("sendMessage",{chat_id:чат,text:"·",disable_notification:true}).then(function(j){
+      if(!j||!j.ok)throw new Error("место "+имяМеста(чат)+" не приняло метку");
+      var mid=j.result.message_id;
+      тг("deleteMessage",{chat_id:чат,message_id:mid}).catch(function(){});
+      return mid;
+    });
+  }
+
+  function читать(чат,ид){
+    return тг("forwardMessage",{chat_id:чат,from_chat_id:чат,message_id:ид,disable_notification:true})
+      .then(function(j){
+        if(!j||!j.ok)return null;
+        var копия=j.result.message_id;
+        тг("deleteMessage",{chat_id:чат,message_id:копия}).catch(function(){});
+        var м=j.result, д=м.document, ф=м.photo, имя="", р=0, тип="", фид="";
+        if(д){имя=д.file_name||("файл_"+ид); р=д.file_size||0; тип=д.mime_type||""; фид=д.file_id}
+        else if(ф&&ф.length){var п=ф[ф.length-1]; имя="фото_"+ид+".jpg"; р=п.file_size||0; тип="image/jpeg"; фид=п.file_id}
+        else return null;
+        var папка="", з=/папка_([^\s·]+)/.exec(м.caption||"");
+        if(з)папка=decodeURIComponent(з[1]).replace(/_/g," ");
+        return {и:имя,р:р,f:фид,мсг:ид,ч:1,д:м.date||0,о:"склад",т:тип,п:папка,чат:чат};
+      }).catch(function(){return null});
+  }
+
+  function место(чат){
+    return верхний(чат).then(function(верх){
+      var ключ="скан-до-"+чат, нач=parseInt(localStorage.getItem(ключ)||"0",10)||0;
+      if(нач>=верх-1)нач=0;            // прошли до конца — начинаем заново
+      var ид=нач+1, партия=[], пауза=0;
+      return new Promise(function(готово){
+        function шаг(){
+          if(ид>верх){готово(0);return}
+          // берём по 3 сообщения разом: втрое быстрее
+          var пачка=[], к;
+          for(к=0;к<3&&ид<=верх;к++){пачка.push(ид);ид++}
+          Promise.all(пачка.map(function(н){return читать(чат,н)})).then(function(записи){
+            var найдено=0;
+            записи.forEach(function(з){
+              if(!з)return;
+              var ключик=ключФайла(з);
+              запомнить(ключик, з);
+              if(з.п){создатьПапку(з.п);РАСКЛАДКА[ключР(з)]=з.п;РАСКЛАДКА_ИМЯ[ключИ(з)]=з.п}
+              найдено++; всего++;
+            });
+            try{localStorage.setItem(ключ,String(ид-1))}catch(e){}
+            обновитьПрогресс(имяМеста(чат)+": "+ид+" из "+верх,(ид-1)/Math.max(1,верх),
+              ид-1, верх, "найдено всего: "+всего);
+            setTimeout(шаг, 320);
+          });
         }
-        ид++; сканКладём(ид);
-        setTimeout(шаг, 550);
+        шаг();
       });
-    }
-    function закончить(){
-      прогресс(false);
-      try{сохранитьВсёВТГ()}catch(e){}
-      сохранитьПапки(); объединитьПамять();
-      нарисовать(); нарисоватьПапки(); нарисоватьСтатусПапок();
-      показатьБаннер("обход закончен: добавлено файлов "+собрано+" · всего у тебя "+ВСЕ.length);
-      setTimeout(function(){var б=$("баннер");if(б)б.style.display="none"},15000);
-    }
-    шаг();
-  }).catch(function(e){
+    }).catch(function(e){ сбоев++; return 0 });
+  }
+
+  function следующее(i){
+    if(i>=очередьЗадач.length)return закончить();
+    место(очередьЗадач[i]).then(function(){ setTimeout(function(){следующее(i+1)},400) });
+  }
+  function закончить(){
     прогресс(false);
-    показатьБаннер("обход не запустился: "+((e&&e.message)||e));
-  });
+    try{сохранитьВсёВТГ()}catch(e){}
+    try{сохранитьПапки()}catch(e){}
+    объединитьПамять(); нарисовать(); нарисоватьПапки(); нарисоватьСтатусПапок();
+    показатьБаннер("обход закончен: найдено файлов "+всего+" · теперь у тебя "+ВСЕ.length+
+      " · папок "+ПАПКИ.length+(сбоев?(" · сбоев: "+сбоев):""));
+    setTimeout(function(){var б=$("баннер");if(б)б.style.display="none"},20000);
+  }
+  следующее(0);
 }
 
 /* ================= ДРОБЛЁННАЯ ЗАГРУЗКА (части по 45 МБ) ================= */
