@@ -68,7 +68,7 @@ footer button{flex:1}
 </style></head><body>
 
 <header>
-  <h1><span>ХРАНИЛИЩЕ <span style="font-size:11px;color:#8b97a8">v5.0</span> <span id="ключ-кнопка" style="font-size:12px;color:#7fb2ff;border:1px solid #2b3546;border-radius:8px;padding:1px 7px">🔑 ключ</span></span><span id="связь" style="font-size:11px;color:var(--dim)">проверяю…</span></h1>
+  <h1><span>ХРАНИЛИЩЕ <span style="font-size:11px;color:#8b97a8">v5.2</span> <span id="ключ-кнопка" style="font-size:12px;color:#7fb2ff;border:1px solid #2b3546;border-radius:8px;padding:1px 7px">🔑 ключ</span></span><span id="связь" style="font-size:11px;color:var(--dim)">проверяю…</span></h1>
   <div class="sub" id="счёт">загрузка…</div>
   <input id="поиск" type="search" placeholder="поиск: имя, тег…" autocomplete="off">
   <div class="row">
@@ -147,6 +147,9 @@ footer button{flex:1}
 <footer>
   <button class="p" id="дробно" style="flex:1.3">📦 Дроблённая загрузка</button>
   <button class="g" id="ссылка-папки">🔗 Ссылка на папку</button>
+</footer>
+<footer>
+  <button id="обход" style="flex:1">🔎 Собрать все мои файлы из канала</button>
 </footer>
 <input type="file" id="выбор" multiple style="display:none">
 <input type="file" id="выбор2" accept="image/*,video/*" multiple style="display:none">
@@ -1542,6 +1545,59 @@ function разобратьИндекс(текст){
   ПАМЯТЬ_ЗАЛИТО=з;
   return добавлено;
 }
+var ГДЕ_ИСКАТЬ=["-1003772678641","7023156818"];  // канал-хранилище и личный чат с ботом
+
+/* Читаем оглавление в одном месте; возвращаем {идыР, идыИ, где} или null. */
+function оглавлениеВ(место){
+  return тг("getChat",{chat_id:место}).then(function(j){
+    if(!j||!j.ok)return null;
+    var п=(j.result||{}).pinned_message||{};
+    var т=п.text||"";
+    if(т.indexOf("ГЛАВНОЕ1|")!==0)return null;
+    var ч=т.split("|");
+    var идыР=(ч[2]||"").split(",").filter(function(х){return х&&!isNaN(parseInt(х,10))});
+    var идыИ=(ч[3]||"").split(",").filter(function(х){return х&&!isNaN(parseInt(х,10))});
+    if(!идыР.length&&!идыИ.length)return null;
+    return {где:место,время:parseInt(ч[1],10)||0,идыР:идыР,идыИ:идыИ,оглавление:п.message_id||0};
+  }).catch(function(){return null});
+}
+
+/* Читаем ВСЕ места и сливаем найденное: файлы из канала и из чата видны вместе. */
+function взятьИзВсехМест(){
+  if(!ТОКЕН)return Promise.resolve({файлов:0,папок:false,мест:[]});
+  var места=ГДЕ_ИСКАТЬ.slice();
+  var своё=чз(); if(своё&&места.indexOf(String(своё))<0)места.unshift(String(своё));
+  return Promise.all(места.map(оглавлениеВ)).then(function(найдено){
+    var есть=найдено.filter(Boolean);
+    if(!есть.length)return {файлов:0,папок:false,мест:[]};
+    var файлов=0, папок=false;
+    function шаг(i){
+      if(i>=есть.length)return Promise.resolve();
+      var о=есть[i], все=о.идыР.concat(о.идыИ);
+      return Promise.all(все.map(function(ид){
+        return тг("forwardMessage",{chat_id:о.где,from_chat_id:о.где,message_id:parseInt(ид,10),disable_notification:true})
+          .then(function(j){
+            if(!j||!j.ok)return "";
+            var копия=j.result.message_id, т=j.result.text||"";
+            тг("deleteMessage",{chat_id:о.где,message_id:копия}).catch(function(){});
+            return т;
+          }).catch(function(){return ""});
+      })).then(function(тексты){
+        var тР=тексты.slice(0,о.идыР.length).join("");
+        var тИ=тексты.slice(о.идыР.length).join("");
+        файлов+=разобратьИндекс(тИ);
+        if(тР&&тР.indexOf("LAYOUT")===0){
+          if(разобратьТекстРаскладки(тР.replace(/^LAYOUT\d\|/,"LAYOUT2|"),""))папок=true;
+        }
+        return шаг(i+1);
+      });
+    }
+    return шаг(0).then(function(){
+      return {файлов:файлов,папок:папок,мест:есть.map(function(о){return о.где})};
+    });
+  }).catch(function(){return {файлов:0,папок:false,мест:[]}});
+}
+
 function взятьВсёИзТГ(){
   if(!ТОКЕН)return Promise.resolve(false);
   return тг("getChat",{chat_id:чз()}).then(function(j){
@@ -2252,7 +2308,9 @@ function скачать(f){
   ссылкаНа(f).then(function(url){открыть(url, f.и);лог("скачиваю: "+f.и)})
     .catch(function(e){показатьБаннер("скачать не вышло: "+e.message)});
 }
+var ДЕЛИТСЯ=false;
 function поделиться(f){
+  if(ДЕЛИТСЯ){показатьБаннер("подожди секунду — окно «Поделиться» уже открыто");return}
   if(f.ids && f.ids.length>1){
     var п=папкаФайла(f);
     if(п){ссылкаНаПапку(п);return}
@@ -2261,9 +2319,23 @@ function поделиться(f){
   }
   if(f.u){ обещатьКопию(f.u); return }
   ссылкаНа(f).then(function(url){
-    if(navigator.share)return navigator.share({title:f.и,url:url});
-    return navigator.clipboard.writeText(url).then(function(){лог("ссылка скопирована")});
-  }).catch(function(e){показатьБаннер("ссылка не получена: "+e.message)});
+    if(navigator.share && !ДЕЛИТСЯ){
+      ДЕЛИТСЯ=true;
+      var готово=function(){ДЕЛИТСЯ=false};
+      try{
+        return navigator.share({title:f.и,url:url}).then(готово,function(err){
+          готово();
+          // окно не открылось или закрыто — просто копируем ссылку
+          return navigator.clipboard.writeText(url).then(function(){показатьБаннер("ссылка скопирована в буфер")})
+            .catch(function(){открыть(url,f.и)});
+        });
+      }catch(e){ ДЕЛИТСЯ=false }
+    }
+    return navigator.clipboard.writeText(url).then(function(){
+      показатьБаннер("ссылка скопирована в буфер");
+      setTimeout(function(){var б=$("баннер");if(б)б.style.display="none"},4000);
+    }).catch(function(){открыть(url,f.и)});
+  }).catch(function(e){показатьБаннер("ссылка не получена: "+((e&&e.message)||e))});
 }
 
 /* ---------- перенос файлов на склад ---------- */
@@ -2811,7 +2883,18 @@ function старт(){
        ждёмКанал().then(function(){
         проверитьТГ().then(function(живой){
           if(!живой)return;
-          взятьВсёИзТГ().then(function(р){
+          взятьИзВсехМест().then(function(общ){
+            if(общ&&общ.файлов>0){
+              объединитьПамять(); применитьПравила(); нарисоватьПапки(); нарисовать();
+              if(общ.файлов>0){
+                показатьБаннер("из Telegram добавлено файлов: "+общ.файлов+" · всего "+ВСЕ.length+
+                  " · папок: "+ПАПКИ.length);
+                setTimeout(function(){var б=$("баннер");if(б)б.style.display="none"},7000);
+              }
+              return {файлов:общ.файлов};
+            }
+            return взятьВсёИзТГ();
+          }).then(function(р){
             if(р&&р.файлов){
               нарисовать(); нарисоватьПапки();
               if(р.файлов>0){
@@ -2867,6 +2950,7 @@ function старт(){
     };
     $("выбор").onchange=function(e){запуститьФайлы(Array.prototype.slice.call(e.target.files))};
     var кд=$("дробно"); if(кд)кд.onclick=дробноЗагрузить;
+    var ко=$("обход"); if(ко)ко.onclick=полныйОбход;
     var кс=$("ссылка-папки"); if(кс)кс.onclick=function(){
       if(прочестьПубличный()){соСсылкойБезКлюча();return}
       var и=(активПапка&&активПапка!==БЕЗ)?активПапка:"";
@@ -2986,6 +3070,83 @@ function публиковатьПапку(имя){
       setTimeout(function(){var б=$("баннер");if(б)б.style.display="none"},20000);
     }
     шаг();
+  });
+}
+
+/* ================= ПОЛНЫЙ ОБХОД КАНАЛА: вернуть ВСЕ файлы ================= */
+var ЧАТ_ДЛЯ_ПОИСКА="-1003772678641";
+
+function сканДо(){ try{ return parseInt(localStorage.getItem("скан-до")||"0",10)||0 }catch(e){ return 0 } }
+function сканКладём(v){ try{ localStorage.setItem("скан-до",String(v)) }catch(e){} }
+
+/* Верхний номер сообщения в канале узнаём дешёво: шлём пустую метку и сразу удаляем. */
+function верхнийНомер(){
+  return тг("sendMessage",{chat_id:ЧАТ_ДЛЯ_ПОИСКА,text:"·",disable_notification:true})
+    .then(function(j){
+      if(!j||!j.ok)throw new Error("канал не принял сообщение");
+      var mid=j.result.message_id;
+      тг("deleteMessage",{chat_id:ЧАТ_ДЛЯ_ПОИСКА,message_id:mid}).catch(function(){});
+      return mid;
+    });
+}
+
+function прочестьСообщение(ид){
+  return тг("forwardMessage",{chat_id:ЧАТ_ДЛЯ_ПОИСКА,from_chat_id:ЧАТ_ДЛЯ_ПОИСКА,
+      message_id:ид,disable_notification:true}).then(function(j){
+    if(!j||!j.ok)return null;
+    var копия=j.result.message_id;
+    тг("deleteMessage",{chat_id:ЧАТ_ДЛЯ_ПОИСКА,message_id:копия}).catch(function(){});
+    var м=j.result, д=м.document, ф=м.photo, имя="", размер2=0, тип="", идфайла="";
+    if(д){
+      имя=д.file_name||("файл_"+ид); размер2=д.file_size||0; тип=д.mime_type||""; идфайла=д.file_id;
+    }else if(ф&&ф.length){
+      var посл=ф[ф.length-1];
+      имя="фото_"+ид+".jpg"; размер2=посл.file_size||0; тип="image/jpeg"; идфайла=посл.file_id;
+    }else return null;
+    var п="", захват=/папка_([^\s·]+)/.exec(м.caption||"");
+    if(захват)п=decodeURIComponent(захват[1]).replace(/_/g," ");
+    return {и:имя,р:размер2,f:идфайла,мсг:ид,ч:1,д:м.date||0,о:"склад",т:тип,п:п};
+  }).catch(function(){return null});
+}
+
+function полныйОбход(){
+  if(!ТОКЕН){показатьНастройку();return}
+  if(!confirm("Пройти по каналу и собрать ВСЕ файлы?\nЭто займёт несколько минут: примерно 1 секунда на сообщение.\nНичего не удаляется — только чтение."))return;
+  прогресс(true);
+  var собрано=0, сбоев=0, стоп2=false;
+  верхнийНомер().then(function(верх){
+    var нач=сканДо();
+    if(нач>0&&нач<верх-1){
+      if(!confirm("Прошлый обход остановился на номере "+нач+" из "+верх+".\nПродолжить с этого места?"))нач=0;
+    }else нач=0;
+    var ид=нач+1;
+    function шаг(){
+      if(стоп2||ид>=верх){закончить();return}
+      обновитьПрогресс("номер "+ид+" из "+верх,(ид-нач)/Math.max(1,верх-нач),ид-нач,верх-нач,
+        "найдено файлов: "+собрано);
+      прочестьСообщение(ид).then(function(запись){
+        if(запись){
+          var ключ=ключФайла(запись);
+          запомнить(ключ, запись);
+          if(запись.п){создатьПапку(запись.п);РАСКЛАДКА[ключР(запись)]=запись.п;РАСКЛАДКА_ИМЯ[ключИ(запись)]=запись.п}
+          собрано++;
+        }
+        ид++; сканКладём(ид);
+        setTimeout(шаг, 550);
+      });
+    }
+    function закончить(){
+      прогресс(false);
+      try{сохранитьВсёВТГ()}catch(e){}
+      сохранитьПапки(); объединитьПамять();
+      нарисовать(); нарисоватьПапки(); нарисоватьСтатусПапок();
+      показатьБаннер("обход закончен: добавлено файлов "+собрано+" · всего у тебя "+ВСЕ.length);
+      setTimeout(function(){var б=$("баннер");if(б)б.style.display="none"},15000);
+    }
+    шаг();
+  }).catch(function(e){
+    прогресс(false);
+    показатьБаннер("обход не запустился: "+((e&&e.message)||e));
   });
 }
 
