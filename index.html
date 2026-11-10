@@ -75,7 +75,7 @@ footer button{flex:1 1 45%;min-width:140px}
 </style></head><body>
 
 <header>
-  <h1><span>ХРАНИЛИЩЕ <span style="font-size:11px;color:#8b97a8">v6.1</span> <span id="ключ-кнопка" style="font-size:12px;color:#7fb2ff;border:1px solid #2b3546;border-radius:8px;padding:1px 7px">🔑 ключ</span></span><span id="связь" style="font-size:11px;color:var(--dim)">проверяю…</span></h1>
+  <h1><span>ХРАНИЛИЩЕ <span id="версия" style="font-size:11px;color:#8b97a8">v7.1 · 11.11</span> <span id="ключ-кнопка" style="font-size:12px;color:#7fb2ff;border:1px solid #2b3546;border-radius:8px;padding:1px 7px">🔑 ключ</span></span><span id="связь" style="font-size:11px;color:var(--dim)">проверяю…</span></h1>
   <div class="sub" id="счёт">загрузка…</div>
   <input id="поиск" type="search" placeholder="поиск: имя, тег…" autocomplete="off">
   <div class="row">
@@ -2236,7 +2236,23 @@ function нарисовать(){
   $("счёт").textContent="всего "+ВСЕ.length+" = моих "+моих+" + встроенных "+встроенныхВСписке()+
     " · на экране "+найдено.length;
   try{обновитьСчётчики()}catch(e){}
-  if(!найдено.length){с.innerHTML='<div class="empty">ничего не найдено</div>';return}
+  if(!найдено.length){
+    var почему=[];
+    почему.push("файлов в списке: "+ВСЕ.length);
+    почему.push("вид: "+ВИД);
+    почему.push("фильтр: "+фильтр);
+    if((q||"").trim())почему.push("поиск: «"+q+"»");
+    почему.push("моих: "+моих+" · встроенных: "+встроенныхВСписке());
+    почему.push("канал: "+(КАНАЛ||"не задан"));
+    почему.push("ключ: "+(ТОКЕН?"есть":"нет"));
+    с.innerHTML='<div class="empty">ничего не найдено<br><span style="font-size:12px;color:#8b97a8">'+
+      почему.join(" · ")+'</span><br><button id="сброс-пусто" style="margin-top:10px;padding:6px 14px;border-radius:8px;'+
+      'border:1px solid #2b3546;background:#1b2230;color:#e8edf5">сбросить фильтры</button></div>';
+    var б=$("сброс-пусто");
+    if(б)б.onclick=function(){var п=$("поиск");if(п)п.value="";фильтр="все";ВИД="список";
+      try{localStorage.setItem("режим-списка","текст")}catch(e){}
+      нарисовать();};
+    return}
   // сортировка по выбору
   найдено.sort(function(a,b){
     var A=ВСЕ[a], B=ВСЕ[b];
