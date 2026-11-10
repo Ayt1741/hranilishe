@@ -1571,6 +1571,34 @@ function разобратьИндекс(текст){
   return добавлено;
 }
 var ГДЕ_ИСКАТЬ=["-1003772678641","7023156818"];  // канал-хранилище и личный чат с ботом
+/* v8.0.4: старые каналы-папки (из них состоял старый сайт) добавляет пользователь.
+   Бот видит канал только если он там администратор: https://core.telegram.org/bots/api#chatmemberadministrator */
+(function(){
+  try{
+    var д=JSON.parse(localStorage.getItem("каналы-для-поиска")||"[]");
+    for(var i=0;i<д.length;i++){ if(ГДЕ_ИСКАТЬ.indexOf(String(д[i]))<0)ГДЕ_ИСКАТЬ.push(String(д[i])) }
+  }catch(e){}
+})();
+function добавитьКаналВПоиск(ввод){
+  var т=String(ввод||"").trim();
+  if(!т)return null;
+  /* принимаем: t.me/c/1234567890/45 · https://t.me/c/1234567890 · -1001234567890 · 1234567890 */
+  var м=/t\.me\/c\/(\d+)/.exec(т), ид;
+  if(м){ ид="-100"+м[1] }
+  else{
+    var ц=т.replace(/[^0-9]/g,"");
+    if(!ц)return null;
+    ид=(ц.length>10)?("-100"+ц.slice(-10)):("-100"+ц);
+  }
+  if(ГДЕ_ИСКАТЬ.indexOf(ид)<0)ГДЕ_ИСКАТЬ.push(ид);
+  try{
+    var д2=JSON.parse(localStorage.getItem("каналы-для-поиска")||"[]");
+    if(д2.indexOf(ид)<0)д2.push(ид);
+    localStorage.setItem("каналы-для-поиска",JSON.stringify(д2));
+  }catch(e){}
+  return ид;
+}
+window.добавитьКаналВПоиск=добавитьКаналВПоиск;   /* IIFE: без экспорта другая часть страницы функцию не видит */
 
 /* Читаем оглавление в одном месте; возвращаем {идыР, идыИ, где} или null. */
 function оглавлениеВ(место){
@@ -4429,6 +4457,7 @@ window.ФАЙЛЫ_АГЕНТА = [
       '<button id="ст-скан" style="padding:11px 14px;font-size:13px">🔎 что видно в этом адресе</button>'+
       '<button id="ст-вход" style="padding:11px 14px;font-size:13px">⬆ загрузить список (JSON)</button>'+
       '<button id="ст-эксп" style="padding:11px 14px;font-size:13px">🧾 открыть export.html</button>'+
+      '<button id="ст-канал" style="padding:11px 14px;font-size:13px">➕ добавить старый канал в поиск</button>'+
       '</div><input type="file" id="ст-файл" accept=".json,application/json" style="display:none">'+
       '<div id="ст-адрес" style="font-size:12px;color:#9aa6b8;margin:0 0 10px"></div>');
     т.push('<div id="ст-итог" style="font-size:12px;color:#9fe3bd;min-height:16px;margin-bottom:8px"></div>');
@@ -4466,6 +4495,17 @@ window.ФАЙЛЫ_АГЕНТА = [
     var бс=document.getElementById("ст-старый"); if(бс) бс.onclick=function(){ window.open("index.html","_blank") };
     var бск=document.getElementById("ст-скан"); if(бск) бск.onclick=сканАдреса;
     var бэ=document.getElementById("ст-эксп"); if(бэ) бэ.onclick=function(){ window.open("export.html","_blank") };
+    var бк=document.getElementById("ст-канал");
+    if(бк) бк.onclick=function(){
+      var ввод=prompt("Ссылка на старый канал-папку или его id.\nНапример: t.me/c/1234567890/45 или -1001234567890",
+        localStorage.getItem("последний-канал-поиска")||"");
+      if(!ввод)return;
+      var ид=(window.добавитьКаналВПоиск||добавитьКаналВПоиск)(ввод);
+      if(!ид){ итог("не понял id канала — пришли ссылку вида t.me/c/1234567890/…", "#ffb4a2"); return }
+      try{localStorage.setItem("последний-канал-поиска",ввод)}catch(e){}
+      итог("канал "+ид+" добавлен в поиск. Теперь нажми «Собрать все мои файлы» — он пройдёт и по нему. "+
+        "Бот должен быть администратором этого канала.", "#9fe3bd");
+    };
     var бвх=document.getElementById("ст-вход"); if(бвх) бвх.onclick=function(){ document.getElementById("ст-файл").click() };
     var бф=document.getElementById("ст-файл"); if(бф) бф.onchange=function(e){ загрузитьСписок(e.target.files[0]) };
     var бп=document.getElementById("ст-перенести"); if(бп) бп.onclick=перенестиВсё;
