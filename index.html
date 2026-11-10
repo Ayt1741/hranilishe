@@ -4306,7 +4306,7 @@ window.ФАЙЛЫ_АГЕНТА = [
    ============================================================================ */
 (function(){
   var ТОКЕН_КЛЮЧ="токен-бота", КАНАЛ_КЛЮЧ="канал-хранилище";
-  var СТ={ открыта:false, файлы:[], папки:{}, есть:false, ошибка:"", страница:1, шаг:200, копия:{} };
+  var СТ={ открыта:false, файлы:[], папки:{}, мини:{}, индекс:{}, есть:false, ошибка:"", страница:1, шаг:200, копия:{} };
 
   function токен(){ try{ return (localStorage.getItem(ТОКЕН_КЛЮЧ)||"").trim() }catch(e){ return "" } }
   function канал(){ try{ return localStorage.getItem(КАНАЛ_КЛЮЧ)||"-1003772678641" }catch(e){ return "-1003772678641" } }
@@ -4476,7 +4476,7 @@ window.ФАЙЛЫ_АГЕНТА = [
     }
     for(var i=0;i<до;i++){
       var х=ф[i], имя=(х.name||"без имени"), п=СТ.папки[х.folderId]||"без папки";
-      var прев=СТ.мини[х.id];
+      var прев=(СТ.мини||{})[х.id];
       т.push('<div class="ст-стр" style="display:flex;gap:10px;align-items:center;padding:9px 2px;border-bottom:1px solid #1d2532">'+
         (прев? '<img src="'+прев+'" style="width:44px;height:44px;object-fit:cover;border-radius:8px;flex:0 0 auto" data-ст-прев="'+i+'">'
              : '<div style="width:44px;height:44px;border-radius:8px;background:#1b2230;display:flex;align-items:center;justify-content:center;flex:0 0 auto;font-size:17px">'+(/^image\//.test(х.mimeType||"")?"🖼":"📄")+'</div>')+
