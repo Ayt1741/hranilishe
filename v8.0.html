@@ -4352,6 +4352,8 @@ window.ФАЙЛЫ_АГЕНТА = [
   function нарисоватьСписок(){
     var спис=document.getElementById("список");
     if(!спис)return;
+    var вк=document.getElementById("вкладка-старое");
+    if(вк) вк.textContent="📦 со старого сайта ("+СТ.файлы.length+")";   /* счётчик всегда актуальный */
     var ф=СТ.файлы, всего=ф.length;
     var размер=ф.reduce(function(а,х){ return а+(х.size||0) },0);
     var до=Math.min(всего, СТ.страница*СТ.шаг);
@@ -4363,7 +4365,10 @@ window.ФАЙЛЫ_АГЕНТА = [
       '<button id="ст-перенести" style="padding:11px 14px;background:#2b5cff;color:#fff;border:0;border-radius:10px;font-size:13px">📥 перенести в мой канал</button>'+
       '<button id="ст-json" style="padding:11px 14px;font-size:13px">⬇ список в JSON</button>'+
       '<button id="ст-старый" style="padding:11px 14px;font-size:13px">↗ открыть старый сайт</button>'+
-      '</div>');
+      '<button id="ст-скан" style="padding:11px 14px;font-size:13px">🔎 что видно в этом адресе</button>'+
+      '<button id="ст-вход" style="padding:11px 14px;font-size:13px">⬆ загрузить список (JSON)</button>'+
+      '</div><input type="file" id="ст-файл" accept=".json,application/json" style="display:none">'+
+      '<div id="ст-адрес" style="font-size:12px;color:#9aa6b8;margin:0 0 10px"></div>');
     т.push('<div id="ст-итог" style="font-size:12px;color:#9fe3bd;min-height:16px;margin-bottom:8px"></div>');
     т.push('</div>');
     if(!всего){
@@ -4389,6 +4394,9 @@ window.ФАЙЛЫ_АГЕНТА = [
     var б=document.getElementById("ст-ещё"); if(б) б.onclick=function(){ СТ.страница++; нарисоватьСписок() };
     var бj=document.getElementById("ст-json"); if(бj) бj.onclick=выгрузитьJSON;
     var бс=document.getElementById("ст-старый"); if(бс) бс.onclick=function(){ window.open("index.html","_blank") };
+    var бск=document.getElementById("ст-скан"); if(бск) бск.onclick=сканАдреса;
+    var бвх=document.getElementById("ст-вход"); if(бвх) бвх.onclick=function(){ document.getElementById("ст-файл").click() };
+    var бф=document.getElementById("ст-файл"); if(бф) бф.onchange=function(e){ загрузитьСписок(e.target.files[0]) };
     var бп=document.getElementById("ст-перенести"); if(бп) бп.onclick=перенестиВсё;
     спис.querySelectorAll("[data-ст-прев]").forEach(function(им){
       им.onclick=function(){ var х=ф[+им.getAttribute("data-ст-прев")]; открытьПревью(СТ.мини[х.id], х.name) };
@@ -4399,6 +4407,75 @@ window.ФАЙЛЫ_АГЕНТА = [
     спис.querySelectorAll("[data-ст-один]").forEach(function(к){
       к.onclick=function(){ перенестиОдин(+к.getAttribute("data-ст-один")) };
     });
+  }
+
+
+  /* --- диагностика: какие базы реально видны в ЭТОМ адресе ---
+     IndexedDB привязана к origin (протокол+хост+порт), путь не важен:
+     https://javascript.info/indexeddb ; https://stackoverflow.com/questions/24224605/ */
+  function сканАдреса(){
+    var э=document.getElementById("ст-адрес");
+    if(!indexedDB){ if(э)э.textContent="браузер не даёт IndexedDB"; return }
+    if(!indexedDB.databases){
+      if(э)э.textContent="браузер не умеет перечислять базы — открой export.html по адресу старого сайта";
+      return;
+    }
+    if(э)э.textContent="смотрю базы в адресе "+location.origin+" …";
+    indexedDB.databases().then(function(р){
+      var имена=(р||[]).map(function(д){ return д.name+(д.version?(" v"+д.version):"") });
+      if(!имена.length){
+        if(э)э.innerHTML="В этом адресе ("+escapeHtml(location.origin)+") <b>ни одной базы</b>. Значит старый сайт открывался по другому адресу — "+
+          "открой <b>export.html</b> там, где он работал, сохрани JSON и загрузи его сюда кнопкой «⬆ загрузить список (JSON)».";
+        return;
+      }
+      if(э)э.textContent="базы в этом адресе: "+имена.join(" · ");
+      /* если нашли tgdrive с файлами — сами подхватываем */
+      прочитать().then(function(){ if(СТ.файлы.length){ вкладка(); нарисоватьСписок() } });
+    }).catch(function(e){ if(э)э.textContent="не смог перечислить: "+(e&&e.message||e) });
+  }
+
+  /* --- импорт списка, выгруженного из старого сайта через export.html --- */
+  function загрузитьСписок(файл){
+    if(!файл)return;
+    var ч=new FileReader();
+    ч.onload=function(){
+      try{
+        var д=JSON.parse(ч.result);
+        var файлы=д.файлы||(д.базы?собратьИзБаз(д):null);
+        if(!файлы||!файлы.length){ итог("в файле нет файлов — пришли его мне, посмотрю", "#ffb4a2"); return }
+        var было=СТ.файлы.length;
+        var папки=д.папки||{};
+        файлы.forEach(function(ф){
+          var ключ=String(ф.id||((ф.folderId||"")+"_"+(ф.messageId||0)));
+          if(СТ.индекс && СТ.индекс[ключ])return;
+          СТ.файлы.push({
+            id:ключ, folderId:String(ф.folderId||""), messageId:ф.messageId, messageIds:ф.messageIds||null,
+            name:ф.name||ф.и||"без имени", size:ф.size||ф.р||0, mimeType:ф.mimeType||ф.т||"",
+            date:ф.date||ф.д||0
+          });
+          if(!СТ.индекс)СТ.индекс={};
+          СТ.индекс[ключ]=1;
+        });
+        for(var к in папки)СТ.папки[к]=папки[к];
+        СТ.файлы.sort(function(a,b){ return (b.date||0)-(a.date||0) });
+        СТ.есть=СТ.файлы.length>0; СТ.страница=1;
+        вкладка(); нарисоватьСписок();
+        итог("загружено из файла: "+(СТ.файлы.length-было)+" новых · всего "+СТ.файлы.length);
+      }catch(e){ итог("файл не разобрался: "+e.message, "#ffb4a2") }
+    };
+    ч.readAsText(файл);
+  }
+  function собратьИзБаз(д){
+    var out=[], i, j;
+    for(i=0;i<(д.базы||[]).length;i++){
+      var б=д.базы[i];
+      if(б.стор!=="files")continue;
+      for(j=0;j<(б.строки||[]).length;j++){
+        var ф=б.строки[j];
+        if(ф && (ф.name||ф.id))out.push(ф);
+      }
+    }
+    return out;
   }
 
   function escapeHtml(s){ return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]}) }
@@ -4483,6 +4560,30 @@ window.ФАЙЛЫ_АГЕНТА = [
       if(i>=список.length){
         итог("готово: скопировано "+сделано+" из "+СТ.файлы.length+(ошибок?(", сбоев "+ошибок):"")+
           (безПрав.length?(". Нет прав в каналах: "+безПрав.join(", ")):"")+". Теперь нажми «Собрать все мои файлы».");
+        /* после переноса сразу предлагаем два действия, чтобы файлы стали видны в «Фото» */
+        try{
+          var п=document.getElementById("ст-итог");
+          if(п && сделано){
+            var б1=document.createElement("button");
+            б1.textContent="📥 собрать перенесённое в список";
+            б1.style.cssText="margin-left:10px;padding:8px 12px;font-size:12px;background:#2b5cff;color:#fff;border:0;border-radius:9px";
+            б1.onclick=function(){ var ц=document.getElementById("обход")||document.getElementById("собрать"); if(ц)ц.click(); else показать(); };
+            var б2=document.createElement("button");
+            б2.textContent="📁 все перенесённые → в «Фото»";
+            б2.style.cssText="margin-left:8px;padding:8px 12px;font-size:12px;background:#1e3a30;color:#8fe3bd;border:0;border-radius:9px";
+            б2.onclick=function(){
+              var ХР=window.__ХР; if(!ХР){ итог("список ещё не собран", "#ffb4a2"); return }
+              var фс=ХР.файлы(), n=0, i;
+              for(i=0;i<фс.length;i++){
+                var ф=фс[i];
+                if(ф.о==="склад" && ХР.папкаФайла(ф)!=="Фото"){ ХР.вПапку&&ХР.вПапку(ф,"Фото"); n++ }
+              }
+              ХР.перерисоватьПапки&&ХР.перерисоватьПапки(); ХР.нарисовать&&ХР.нарисовать();
+              итог("в «Фото» отправлено: "+n);
+            };
+            п.appendChild(б1); п.appendChild(б2);
+          }
+        }catch(e){}
         return;
       }
       var fid=список[i], чат=идКанала(fid);
