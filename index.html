@@ -4314,7 +4314,68 @@ window.ФАЙЛЫ_АГЕНТА = [
       з.onerror=function(){ нет(з.error) };
     });
   }
+  /* имена, под которыми могла сохраниться база старого сайта */
+  /* ВАЖНО: перебираем только те базы, которые реально существуют.
+     indexDB.open("несуществующее") СОЗДАЁТ пустую базу — так делать нельзя. */
+  function именаКандидатов(){
+    if(!indexedDB.databases) return Promise.resolve(["tgdrive"]);   /* старый движок: один известный вариант */
+    return indexedDB.databases().then(function(р){
+      var баз=[];
+      (р||[]).forEach(function(д){
+        if(!д||!д.name)return;
+        if(д.name==="хранилище-очередь")return;          /* наша собственная база */
+        баз.push(д.name);
+      });
+      return баз;
+    }).catch(function(){ return ["tgdrive"] });
+  }
+  /* открываем базу без версии и смотрим, есть ли в ней хранилище files */
+  function базаСФайлами(имя){
+    return new Promise(function(да){
+      var з;
+      try{ з=indexedDB.open(имя) }catch(e){ да(null); return }
+      з.onerror=function(){ да(null) };
+      з.onblocked=function(){ да(null) };
+      з.onsuccess=function(){
+        var db=з.result;
+        var есть=db.objectStoreNames.contains("files")||db.objectStoreNames.contains("Files");
+        if(!есть){ try{db.close()}catch(e){}; да(null); return }
+        да({db:db, имя:имя, файлы:db.objectStoreNames.contains("files")?"files":"Files"});
+      };
+    });
+  }
+  function найтиБазу(){
+    return именаКандидатов().then(function(имена){
+      return имена.reduce(function(цеп,имя){
+        return цеп.then(function(найдено){
+          if(найдено)return найдено;
+          return базаСФайлами(имя).then(function(р){ return р||null });
+        });
+      }, Promise.resolve(null));
+    });
+  }
+
   function прочитать(){
+    if(!indexedDB){ СТ.ошибка="браузер не даёт IndexedDB"; return Promise.resolve(false) }
+    return найтиБазу().then(function(най){
+      if(!най){ СТ.ошибка="ни в одной базе этого адреса нет файлов"; return false }
+      СТ.база=най.имя;
+      var db=най.db;
+      return Promise.all([всёИз(db,най.файлы), всёИз(db,"folders"), всёИз(db,"thumbs"), всёИз(db,"credentials")])
+        .then(function(р){
+          try{db.close()}catch(e){}
+          СТ.файлы=р[0]||[];
+          СТ.папки={}; (р[1]||[]).forEach(function(п){ СТ.папки[String(п.id)]=п.title||("папка "+п.id) });
+          СТ.мини={}; (р[2]||[]).forEach(function(т){ СТ.мини[т.id]=т.dataUrl });
+          СТ.файлы.forEach(function(ф){ ф.folderId=String(ф.folderId||"") });
+          СТ.файлы.sort(function(a,b){ return (b.date||0)-(a.date||0) });
+          СТ.есть=СТ.файлы.length>0;
+          return true;
+        });
+    }).catch(function(e){ СТ.ошибка=e.message||String(e); return false });
+  }
+
+  function прочитатьСтарое(){
     if(!indexedDB){ СТ.ошибка="браузер не даёт IndexedDB"; return Promise.resolve(false) }
     return открытьБазу().then(function(db){
       return Promise.all([всёИз(db,"files"), всёИз(db,"folders"), всёИз(db,"thumbs"), всёИз(db,"credentials")])
@@ -4367,13 +4428,22 @@ window.ФАЙЛЫ_АГЕНТА = [
       '<button id="ст-старый" style="padding:11px 14px;font-size:13px">↗ открыть старый сайт</button>'+
       '<button id="ст-скан" style="padding:11px 14px;font-size:13px">🔎 что видно в этом адресе</button>'+
       '<button id="ст-вход" style="padding:11px 14px;font-size:13px">⬆ загрузить список (JSON)</button>'+
+      '<button id="ст-эксп" style="padding:11px 14px;font-size:13px">🧾 открыть export.html</button>'+
       '</div><input type="file" id="ст-файл" accept=".json,application/json" style="display:none">'+
       '<div id="ст-адрес" style="font-size:12px;color:#9aa6b8;margin:0 0 10px"></div>');
     т.push('<div id="ст-итог" style="font-size:12px;color:#9fe3bd;min-height:16px;margin-bottom:8px"></div>');
     т.push('</div>');
     if(!всего){
-      т.push('<div style="padding:18px;border:1px dashed #2b3546;border-radius:12px;color:#c7cfdd">Старых файлов не найдено. Причина: '+
-        (СТ.ошибка||"в этом браузере нет базы «tgdrive» — старый сайт открывался в другом браузере или профиле")+'</div>');
+      т.push('<div style="padding:16px;border:1px dashed #2b3546;border-radius:12px;color:#c7cfdd;line-height:1.55">'+
+        '<b style="color:#ffb4a2">Старых файлов в этом адресе нет.</b><br>'+
+        'Причина: '+(СТ.ошибка||"база браузера пуста или лежит в другом адресе")+'.<br><br>'+
+        '<b>Что делать по порядку:</b><br>'+
+        '1. Нажми «🔎 что видно в этом адресе» — покажу список баз, которые реально доступны здесь.<br>'+
+        '2. Если баз нет — старый сайт открывался по другому адресу или файлом с диска. Открой '+
+        '<b>export.html</b> (кнопка ниже) там, где он работал, нажми в нём «найти базы» и сохрани JSON.<br>'+
+        '3. Загрузи этот JSON сюда кнопкой «⬆ загрузить список (JSON)» — тогда перенос заработает из любого адреса.<br>'+
+        '4. Если базы не осталось нигде — файлы всё равно в Telegram: добавь бота админом в старые каналы и нажми «Собрать все мои файлы».'+
+        '</div>');
     }
     for(var i=0;i<до;i++){
       var х=ф[i], имя=(х.name||"без имени"), п=СТ.папки[х.folderId]||"без папки";
@@ -4395,6 +4465,7 @@ window.ФАЙЛЫ_АГЕНТА = [
     var бj=document.getElementById("ст-json"); if(бj) бj.onclick=выгрузитьJSON;
     var бс=document.getElementById("ст-старый"); if(бс) бс.onclick=function(){ window.open("index.html","_blank") };
     var бск=document.getElementById("ст-скан"); if(бск) бск.onclick=сканАдреса;
+    var бэ=document.getElementById("ст-эксп"); if(бэ) бэ.onclick=function(){ window.open("export.html","_blank") };
     var бвх=document.getElementById("ст-вход"); if(бвх) бвх.onclick=function(){ document.getElementById("ст-файл").click() };
     var бф=document.getElementById("ст-файл"); if(бф) бф.onchange=function(e){ загрузитьСписок(e.target.files[0]) };
     var бп=document.getElementById("ст-перенести"); if(бп) бп.onclick=перенестиВсё;
@@ -4429,8 +4500,17 @@ window.ФАЙЛЫ_АГЕНТА = [
         return;
       }
       if(э)э.textContent="базы в этом адресе: "+имена.join(" · ");
-      /* если нашли tgdrive с файлами — сами подхватываем */
-      прочитать().then(function(){ if(СТ.файлы.length){ вкладка(); нарисоватьСписок() } });
+      /* если нашли базу с файлами — сами подхватываем и показываем */
+      прочитать().then(function(){
+        if(СТ.файлы.length){
+          вкладка(); нарисоватьСписок();
+          if(э)э.innerHTML="✅ в этом адресе нашлась база <b>"+escapeHtml(СТ.база||"")+"</b> — файлов "+СТ.файлы.length+
+            ". Имена баз: "+имена.join(" · ");
+        }else if(э){
+          э.innerHTML="базы в этом адресе: "+имена.join(" · ")+" — но <b>ни в одной нет файлов</b>. "+
+            "Значит старое хранилище лежит в другом адресе: открой <b>export.html</b> там, где работал старый сайт, и загрузи сюда JSON.";
+        }
+      });
     }).catch(function(e){ if(э)э.textContent="не смог перечислить: "+(e&&e.message||e) });
   }
 
