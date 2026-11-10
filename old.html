@@ -48,10 +48,24 @@
       "font:13px system-ui,sans-serif;color:#e8edf5;box-shadow:0 6px 24px rgba(0,0,0,.45)";
     б.innerHTML='<span id="аг-итог">выгрузка файлов</span>'+
       '<button id="аг-выгр" style="padding:8px 12px;border-radius:9px;border:0;background:#2b5cff;color:#fff;font-size:13px;cursor:pointer">⤓ выгрузить JSON</button>'+
+      '<button id="аг-раскр" style="padding:8px 12px;border-radius:9px;border:1px solid #2b3546;background:#1b2230;color:#c7cfdd;font-size:13px;cursor:pointer">⤵ раскрыть всё и выгрузить</button>'+
       '<button id="аг-скрыть" style="padding:8px 10px;border-radius:9px;border:1px solid #2b3546;background:#1b2230;color:#c7cfdd;font-size:13px;cursor:pointer">✕</button>';
     document.body.appendChild(б);
     б.querySelector("#аг-скрыть").onclick=function(){ б.remove() };
     б.querySelector("#аг-выгр").onclick=function(){ выгрузить() };
+    б.querySelector("#аг-раскр").onclick=function(){
+      статус("раскрываю список…");
+      раскрытьВсё().then(function(шагов){
+        var строки=собратьСтроки();
+        var данные={вид:"хранилище-старое-список",версия:1,когда:new Date().toISOString(),
+          адрес:location.hash||"", шагов:шагов, сколько:строки.length, файлы:строки};
+        var блоб=new Blob([JSON.stringify(данные,null,1)],{type:"application/json"});
+        var а=document.createElement("a");
+        а.href=URL.createObjectURL(блоб); а.download="старый-сайт-страница.json";
+        document.body.appendChild(а); а.click(); а.remove();
+        статус("раскрыто шагов "+шагов+" · файлов в списке "+строки.length+" → JSON сохранён");
+      });
+    };
   }
 
   function открыть(){
@@ -71,6 +85,50 @@
     });
   }
   function статус(т){ var э=document.getElementById("аг-итог"); if(э)э.textContent=т }
+
+  /* Раскрываем постраничный список: жмём «ПОКАЗАТЬ ЕЩЁ 50», пока кнопка не исчезнет.
+     Нужно потому, что старый сайт грузит по 50 строк и остальные не отдаёт. */
+  function раскрытьВсё(){
+    return new Promise(function(готово){
+      var шагов=0, тишина=0, старт=Date.now();
+      function искать(){
+        var кн=[].slice.call(document.querySelectorAll("button"));
+        var к=кн.filter(function(б){ return /показать\s*ещё|показать\s*еще|load\s*more/i.test(б.textContent||"") })[0];
+        if(!к){ тишина++; if(тишина>2){ готово(шагов); return } }
+        else{
+          тишина=0;
+          try{ к.scrollIntoView({block:"center"}); к.click() }catch(e){}
+          шагов++;
+        }
+        if(шагов>300 || (Date.now()-старт)>90000){ готово(шагов); return }
+        статус("раскрываю список… шагов "+шагов+" · строк "+строкНаЭкране());
+        setTimeout(искать, 600);
+      }
+      искать();
+    });
+  }
+  function строкНаЭкране(){
+    var т=document.querySelectorAll("table tbody tr");
+    if(т.length)return т.length;
+    return document.querySelectorAll('[class*="divide-y"] > div').length;
+  }
+  /* Собираем строки списка: имя, размер, дата. */
+  function собратьСтроки(){
+    var out=[], узлы=[].slice.call(document.querySelectorAll("table tbody tr"));
+    if(!узлы.length){
+      узлы=[].slice.call(document.querySelectorAll('[class*="divide-y"] > div'));
+    }
+    узлы.forEach(function(у){
+      var т=(у.innerText||"").replace(/\s+/g," ").trim();
+      if(!т)return;
+      var м=т.match(/^(.*?\.(?:pdf|jpe?g|png|gif|webp|heic|mp4|mov|mkv|mp3|m4a|zip|rar|7z|docx?|xlsx?|txt|json|exe|apk|html?))\s*(.*)$/i);
+      if(!м)return;
+      var размер=/\d+([.,]\d+)?\s*(Б|КБ|МБ|ГБ|ТБ)/i.exec(м[2]);
+      var дата=/(\d{1,2}\.\d{1,2}\.\d{4})|(\d{4}-\d{2}-\d{2})/.exec(м[2]);
+      out.push({name:м[1].trim(), sizeText:размер?размер[0]:"", dateText:дата?дата[0]:"", raw:т.slice(0,200)});
+    });
+    return out;
+  }
 
   function выгрузить(){
     статус("читаю базу…");
