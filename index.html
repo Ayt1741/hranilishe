@@ -75,8 +75,14 @@ footer button{flex:1 1 45%;min-width:140px}
 </style></head><body>
 
 <header>
-  <h1><span>ХРАНИЛИЩЕ <span id="версия" style="font-size:11px;color:#8b97a8">v7.2 · 11.11</span> <span id="ключ-кнопка" style="font-size:12px;color:#7fb2ff;border:1px solid #2b3546;border-radius:8px;padding:1px 7px">🔑 ключ</span></span><span id="связь" style="font-size:11px;color:var(--dim)">проверяю…</span></h1>
+  <h1><span>ХРАНИЛИЩЕ <span id="версия" style="font-size:11px;color:#8b97a8">v8.0 · 11.11</span> <span id="диаг-кнопка" style="font-size:12px;color:#7fb2ff;border:1px solid #2b3546;border-radius:8px;padding:1px 7px;margin-right:4px">ⓘ</span> <span id="ключ-кнопка" style="font-size:12px;color:#7fb2ff;border:1px solid #2b3546;border-radius:8px;padding:1px 7px">🔑 ключ</span></span><span id="связь" style="font-size:11px;color:var(--dim)">проверяю…</span></h1>
   <div class="sub" id="счёт">загрузка…</div>
+  <div id="навигация" style="display:flex;align-items:center;gap:6px;margin:6px 0 2px">
+    <button id="назад" title="назад" style="flex:0 0 auto;padding:6px 12px;font-size:14px">←</button>
+    <button id="вперёд" title="вперёд" style="flex:0 0 auto;padding:6px 12px;font-size:14px">→</button>
+    <button id="вверх" title="в корень" style="flex:0 0 auto;padding:6px 12px;font-size:14px">⇧</button>
+    <div id="крошки" style="flex:1;font-size:12px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+  </div>
   <input id="поиск" type="search" placeholder="поиск: имя, тег…" autocomplete="off">
   <div class="row">
     <div class="tab on" data-ф="все">все</div>
@@ -84,6 +90,7 @@ footer button{flex:1 1 45%;min-width:140px}
     <div class="tab" data-ф="склад">склад</div>
     <div class="tab" data-ф="телефон">с телефона</div>
     <div class="tab" data-ф="exe">программы</div>
+    <div class="tab" data-ф="агент" id="вкладка-агент">🤖 от агента</div>
   </div>
   <div class="row" id="папки"></div>
   <div class="row" id="ряд-скачать" style="gap:8px;overflow:visible">
@@ -2243,14 +2250,24 @@ function нарисовать(){
     почему.push("фильтр: "+фильтр);
     var пИск=$("поиск"); if(пИск && пИск.value.trim())почему.push("поиск: «"+пИск.value+"»");
     почему.push("моих: "+моих+" · встроенных: "+встроенныхВСписке());
+    if(активПапка===БЕЗ)почему.unshift("вы в разделе «без папки»");
+    else if(активПапка)почему.unshift("вы в папке «"+активПапка+"» — в ней "+счётВ(активПапка)+" файлов");
     почему.push("канал: "+(КАНАЛ||"не задан"));
     почему.push("ключ: "+(ТОКЕН?"есть":"нет"));
     с.innerHTML='<div class="empty">ничего не найдено<br><span style="font-size:12px;color:#8b97a8">'+
       почему.join(" · ")+'</span><br><button id="сброс-пусто" style="margin-top:10px;padding:6px 14px;border-radius:8px;'+
-      'border:1px solid #2b3546;background:#1b2230;color:#e8edf5">сбросить фильтры</button></div>';
+      'border:1px solid #2b3546;background:#1b2230;color:#e8edf5">сбросить фильтры</button> '+
+      '<button id="показать-всё" style="margin-top:10px;margin-left:8px;padding:6px 14px;border-radius:8px;'+
+      'border:1px solid #2b3546;background:#1b2230;color:#e8edf5">показать всё</button> '+
+      '<button id="диаг-пусто" style="margin-top:10px;margin-left:8px;padding:6px 14px;border-radius:8px;'+
+      'border:1px solid #2b3546;background:#1b2230;color:#e8edf5">диагностика</button></div>';
+    var бв=$("показать-всё"); if(бв)бв.onclick=function(){if(window.показатьВсё)window.показатьВсё()};
+    var бд=$("диаг-пусто"); if(бд)бд.onclick=function(){if(window.диагностика)window.диагностика()};
     var б=$("сброс-пусто");
     if(б)б.onclick=function(){var п=$("поиск");if(п)п.value="";фильтр="все";ВИД="список";
+      активПапка="";try{localStorage.setItem("активная-папка","")}catch(e){}
       try{localStorage.setItem("режим-списка","текст")}catch(e){}
+      if(typeof обновитьКрошки==="function")обновитьКрошки();
       нарисовать();};
     return}
   // сортировка по выбору
@@ -2280,12 +2297,13 @@ function нарисовать(){
         :
         (фильтр==="корзина"
           ? ('<button class="p" data-верн="'+и+'">Вернуть</button><button data-навсег="'+и+'">Удалить навсегда</button>')
-          : ('<button class="p" data-с="'+и+'">Скачать</button><button data-ш="'+и+'">Ссылка</button><button data-пк="'+и+'">В папку</button><button data-изб="'+и+'" title="в избранное">'+(вИзбранном(f)?'★':'☆')+'</button><button data-тр="'+и+'" title="в корзину">🗑</button>'))
+          : ('<button class="p" data-с="'+и+'">Скачать</button><button data-ш="'+и+'">Ссылка</button><button data-пк="'+и+'">В папку</button><button data-пер="'+и+'" title="переименовать">✎</button><button data-изб="'+и+'" title="в избранное">'+(вИзбранном(f)?'★':'☆')+'</button><button data-тр="'+и+'" title="в корзину">🗑</button>'))
       )+'</div></div>');
   }
   if(найдено.length>до)html.push('<div class="empty">показаны первые '+до+' из '+найдено.length+' — уточни поиск</div>');
   с.innerHTML=html.join("");
   с.querySelectorAll("[data-изб]").forEach(function(к){к.onclick=function(e){e.stopPropagation();переключитьИзбранное(ВСЕ[+к.dataset.изб])}});
+  с.querySelectorAll("[data-пер]").forEach(function(к){к.onclick=function(e){e.stopPropagation();переименоватьФайл(ВСЕ[+к.dataset.пер])}});
   с.querySelectorAll("[data-тр]").forEach(function(к){к.onclick=function(e){e.stopPropagation();вКорзину(ВСЕ[+к.dataset.тр])}});
   с.querySelectorAll("[data-верн]").forEach(function(к){к.onclick=function(e){e.stopPropagation();изКорзины(ВСЕ[+к.dataset.верн])}});
   с.querySelectorAll("[data-навсег]").forEach(function(к){к.onclick=function(e){e.stopPropagation();удалитьНавсегда(ВСЕ[+к.dataset.навсег])}});
@@ -3829,6 +3847,19 @@ window.ХРАНИЛИЩЕ={папки:function(){return ПАПКИ},раскла
   проверитьМесто:выбратьМесто,очередь:очередьВсе,вОчередь:вОчередь,
   запомнить:запомнить,перенестиВсёВ:перенестиВсёВ,правила:применитьПравила,папкаПоПравилу:папкаПоПравилу,проверка:полнаяПроверка,строкаИтога:строкаИтога,дослать:дослатьНедостающее,запустить:запуститьФайлы,повтор:повторЛи,разделить:разделитьНаНовые,гдеМои:гдеМои,моихФайлов:моихФайлов,партия:запуститьПартию,разовоВФото:разовоВФото,обновитьПомеченные:обновитьПомеченные,приложения:приложения,запуститьПриложение:запуститьПриложение,показатьПриложения:показатьПриложения,память:памятьПриложения,показатьПамять:показатьПамять,очиститьОчередь:очиститьОчередь,строка:строкиФайла,убратьМусор:убратьМусорИзЧата,fileIdИзСообщения:fileIdИзСообщения,списокФайлом:записатьСписокФайлом,режимСписка:режимСписка,поставитьРежим:поставитьРежим,текстСписка:текстСпискаФайлом,разобратьСписок:разобратьСписокИзТекста,починить:починитьПапки,показатьКанал:показатьКанал,найтиКанал:найтиКанал,перенестиВКанал:перенестиВсёВКанал,канал:function(){return КАНАЛ},поставитьКанал:поставитьКанал,сообщитьКаналВЛС:сообщитьКаналВЛС,узнатьКаналИзЛС:узнатьКаналИзЛС,цифры:цифрыПамяти,страховка:сохранитьВсёВТГ,изСтраховки:взятьВсёИзТГ,разобратьИндекс:разобратьИндекс,дописать:дописатьИндекс,список:списокДляФайла,счётВ:счётВ,разложить:разложитьПоТипам,собратьZip:собратьZip,скачатьНабор:скачатьНабор,выбранные:function(){return выбранные},включитьВыбор:включитьВыбор,режим:function(){return режимВыбора},выбранныеФайлы:выбранныеФайлы,
   отправитьОчередь:отправитьОчередь,прочестьЧасть:прочестьЧасть,сохранитьВТГ:сохранитьРаскладкуВТГ,разобрать:разобратьТекстРаскладки,собрать:собратьТекстРаскладки,очередьУдалить:очередьУдалить,сохранитьТокен:сохранитьТокен,естьТокен:function(){return !!ТОКЕН},объединить:объединитьПамять};
+/* ---- v8: наружу для надстройки (всё остальное остаётся в замыкании) ---- */
+window.__ХР={
+  нарисовать:нарисовать, нарисоватьПапки:нарисоватьПапки, сохранитьПапки:сохранитьПапки,
+  счётВ:счётВ, папкаФайла:папкаФайла, встроенныхВСписке:встроенныхВСписке, создатьПапку:создатьПапку,
+  взять:function(){return {ВСЕ:ВСЕ,фильтр:фильтр,активПапка:активПапка,ПАПКИ:ПАПКИ,ВИД:ВИД,СОРТ:СОРТ,КАНАЛ:КАНАЛ,ТОКЕН:ТОКЕН,БЕЗ:БЕЗ}},
+  поставить:function(о){
+    if("фильтр" in о)фильтр=о.фильтр;
+    if("активПапка" in о){активПапка=о.активПапка;try{localStorage.setItem("активная-папка",активПапка||"")}catch(e){}}
+    if("ВИД" in о){ВИД=о.ВИД;try{localStorage.setItem("режим-списка",ВИД)}catch(e){}}
+  },
+  файлы:function(){return ВСЕ},
+  перерисоватьПапки:function(){try{нарисоватьПапки()}catch(e){}}
+};
 if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",старт)}else{старт()}
 setTimeout(function(){
   if($("счёт").textContent==="загрузка…"){
@@ -3837,4 +3868,301 @@ setTimeout(function(){
   }
 },2500);
 })();
-</script></body></html>
+</script>
+<script>
+/* ================= v8.0 НАДСТРОЙКА · работает через window.__ХР ================= */
+(function(){
+  function ХР(){return window.__ХР||null}
+  function ст(){var х=ХР();return х?х.взять():{}}
+
+  /* ---- локальные имена файлов ---- */
+  var КЛЮЧ_ИМЁН="переименования-v8";
+  function карта(){try{return JSON.parse(localStorage.getItem(КЛЮЧ_ИМЁН)||"{}")}catch(e){return{}}}
+  function ключФ(ф){return (ф.ид||ф.id||"")+"|"+(ф.и||"")}
+  window.ЭТО_ИМЯ_ФАЙЛА=function(ф){return карта()[ключФ(ф)]||ф.и};
+  window.переименоватьФайл=function(ф){
+    if(!ф)return;
+    var т=prompt("Новое имя файла (в Telegram имя остаётся прежним — переименование только здесь):",window.ЭТО_ИМЯ_ФАЙЛА(ф));
+    if(т===null)return; т=т.trim(); if(!т)return;
+    var к=карта(); к[ключФ(ф)]=т;
+    try{localStorage.setItem(КЛЮЧ_ИМЁН,JSON.stringify(к))}catch(e){alert("Память браузера переполнена — имя не сохранено")}
+    перерисовать();
+  };
+
+  function перерисовать(){var х=ХР(); if(х)х.нарисовать(); раскрасить()}
+
+  /* ---- хлебные крошки ---- */
+  window.обновитьКрошки=function(){
+    var э=document.getElementById("крошки"); if(!э)return;
+    var с=ст(), а=с.активПапка||"";
+    var html='<span style="color:#7fb2ff;cursor:pointer" data-кр="1">все папки</span>';
+    if(а==="__без")html+=' / без папки';
+    else if(а)html+=' / 📁 '+String(а).replace(/[<>&]/g,"")+' <span style="color:#ffb020">('+(ХР().счётВ(а))+')</span>';
+    html+=' <span style="color:#3c4757">· '+ (с.ВСЕ?с.ВСЕ.length:0) +' файлов · '+ (с.фильтр||"все") +' · '+(с.ВИД||"список")+'</span>';
+    э.innerHTML=html;
+    э.querySelector("[data-кр]").onclick=function(){var х=ХР();х.поставить({активПапка:""});window.обновитьКрошки();перерисовать()};
+  };
+
+  /* ---- назад / вперёд / вверх ---- */
+  var ист=[],поз=-1,зам=false;
+  function запомнить(){var с=ст();if(!ХР()||зам)return;
+    var к=(с.активПапка||"")+"|"+(с.фильтр||"");
+    if(поз>=0&&ист[поз].к===к)return;
+    ист=ист.slice(0,поз+1);ист.push({к:к,п:с.активПапка||"",ф:с.фильтр||"все"});поз=ист.length-1}
+  function шаг(n){var i=поз+n;if(i<0||i>=ист.length)return;
+    поз=i;зам=true;var х=ХР();х.поставить({активПапка:ист[i].п,фильтр:ист[i].ф});
+    document.querySelectorAll(".tab").forEach(function(т){т.classList.toggle("on",т.dataset.ф===ист[i].ф)});
+    window.обновитьКрошки();перерисовать();setTimeout(function(){зам=false},60)}
+  document.addEventListener("click",function(e){
+    var к=e.target.closest("#назад,#вперёд,#вверх"); if(!к)return;
+    if(к.id==="назад")шаг(-1);
+    else if(к.id==="вперёд")шаг(1);
+    else {ХР().поставить({активПапка:""});window.обновитьКрошки();перерисовать()}
+  },true);
+  document.addEventListener("click",function(e){
+    if(e.target.closest(".pap")||e.target.closest(".tab"))setTimeout(function(){запомнить();window.обновитьКрошки()},80);
+  },true);
+
+  /* ---- папки: ✎ и ✕ ---- */
+  window.переименоватьПапку=function(старое){
+    var т=prompt("Новое имя папки:",старое); if(т===null)return; т=т.trim();
+    if(!т||т===старое)return;
+    try{
+      var п=JSON.parse(localStorage.getItem("папки")||"[]");
+      var i=п.indexOf(старое); if(i>=0)п[i]=т; else п.push(т);
+      localStorage.setItem("папки",JSON.stringify(п));
+      var р=JSON.parse(localStorage.getItem("раскладка")||"{}");
+      Object.keys(р).forEach(function(к){if(р[к]===старое)р[к]=т});
+      localStorage.setItem("раскладка",JSON.stringify(р));
+      var х=ХР(), с=х.взять();
+      var и=с.ПАПКИ.indexOf(старое); if(и>=0)с.ПАПКИ[и]=т;
+      (с.ВСЕ||[]).forEach(function(ф){if(ф.п===старое)ф.п=т});
+      if(с.активПапка===старое)х.поставить({активПапка:т});
+      if(х.сохранитьПапки)х.сохранитьПапки(true);
+    }catch(e){alert("Не переименовалось: "+e.message)}
+    window.обновитьКрошки(); ХР().перерисоватьПапки(); перерисовать();
+  };
+  var последняя=null;
+  window.удалитьПапку=function(имя){
+    var х=ХР(), с=х.взять(), n=х.счётВ(имя);
+    if(!confirm("Удалить папку «"+имя+"»?\nФайлы останутся ("+n+" шт.), они просто выйдут из папки. Можно вернуть кнопкой «вернуть»."))return;
+    последняя={имя:имя,ключи:[]};
+    try{
+      var п=JSON.parse(localStorage.getItem("папки")||"[]").filter(function(з){return з!==имя});
+      localStorage.setItem("папки",JSON.stringify(п));
+      var р=JSON.parse(localStorage.getItem("раскладка")||"{}");
+      Object.keys(р).forEach(function(к){if(р[к]===имя){последняя.ключи.push(к);delete р[к]}});
+      localStorage.setItem("раскладка",JSON.stringify(р));
+      var i=с.ПАПКИ.indexOf(имя); if(i>=0)с.ПАПКИ.splice(i,1);
+      if(с.активПапка===имя)х.поставить({активПапка:""});
+    }catch(e){alert("Не удалилось: "+e.message)}
+    window.обновитьКрошки(); ХР().перерисоватьПапки(); перерисовать();
+    отмена("папка «"+имя+"» убрана · файлы целы");
+  };
+  function отмена(текст){
+    var б=document.createElement("div");
+    б.style.cssText="position:fixed;left:10px;right:10px;bottom:12px;z-index:9999;background:#1b2230;border:1px solid #2b3546;border-radius:12px;padding:10px;display:flex;gap:8px;align-items:center;font-size:13px";
+    б.innerHTML='<span style="flex:1">'+текст+'</span><button id="о-верн" style="padding:8px 12px">вернуть</button><button id="о-зкр" style="padding:8px 12px;background:#242c38">✕</button>';
+    document.body.appendChild(б);
+    б.querySelector("#о-зкр").onclick=function(){б.remove()};
+    б.querySelector("#о-верн").onclick=function(){
+      try{
+        if(!последняя)return;
+        var п=JSON.parse(localStorage.getItem("папки")||"[]");
+        if(п.indexOf(последняя.имя)<0)п.push(последняя.имя);
+        localStorage.setItem("папки",JSON.stringify(п));
+        var р=JSON.parse(localStorage.getItem("раскладка")||"{}");
+        последняя.ключи.forEach(function(к){р[к]=последняя.имя});
+        localStorage.setItem("раскладка",JSON.stringify(р));
+        var с=ХР().взять(); if(с.ПАПКИ.indexOf(последняя.имя)<0)с.ПАПКИ.push(последняя.имя);
+      }catch(e){}
+      б.remove(); ХР().перерисоватьПапки(); перерисовать();
+    };
+    setTimeout(function(){if(б.parentNode)б.remove()},15000);
+  }
+
+  /* ---- «⋯ ещё»: разгружаем меню ---- */
+  function разгрузить(){
+    var ряд=document.getElementById("ряд-скачать");
+    if(!ряд||document.getElementById("ещё-кнопка"))return;
+    var к=document.createElement("button");
+    к.id="ещё-кнопка";к.textContent="⋯ ещё";
+    к.style.cssText="flex:0 0 auto;padding:8px 10px;font-size:12px";
+    ряд.appendChild(к);
+    к.onclick=function(){
+      var ш=document.createElement("div");
+      ш.style.cssText="position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.55);display:flex;align-items:flex-end";
+      ш.innerHTML='<div style="background:#141a22;width:100%;border-radius:16px 16px 0 0;padding:14px;max-height:80vh;overflow:auto">'+
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><b style="flex:1;font-size:15px">Ещё действия</b>'+
+        '<button id="зкр" style="padding:9px 14px;background:#242c38">✕ закрыть</button></div><div id="пп" style="display:grid;gap:8px"></div></div>';
+      document.body.appendChild(ш);
+      var пп=ш.querySelector("#пп");
+      [["📦 Дроблённая загрузка","дробно"],["🔗 Ссылка на папку","ссылка-папки"],
+       ["🔎 Собрать все мои файлы","обход"],["📷 В раздел «Фото»","кнопка-вфото"],
+       ["ⓘ Диагностика","диаг-кнопка"]].forEach(function(п){
+        var б=document.createElement("button");
+        б.textContent=п[0];
+        б.style.cssText="padding:14px;font-size:14px;text-align:left;background:#1b2230;border:1px solid #2b3546;border-radius:10px";
+        б.onclick=function(){ш.remove();var ц=document.getElementById(п[1]);if(ц)ц.click()};
+        пп.appendChild(б);
+      });
+      ш.querySelector("#зкр").onclick=function(){ш.remove()};
+      ш.onclick=function(e){if(e.target===ш)ш.remove()};
+      document.addEventListener("keydown",function(e){if(e.key==="Escape")ш.remove()},{once:true});
+    };
+  }
+
+  /* ---- раздел «от агента» ---- */
+  function раздел(){
+    var с=ст(); if((с.фильтр||"")!=="агент")return false;
+    var box=document.getElementById("список"); if(!box)return false;
+    var мои=window.ФАЙЛЫ_АГЕНТА||[];
+    var h=['<div style="padding:8px 2px;font-size:12px;color:#8b97a8">Только файлы агента. Названия и ссылки веду я; '+
+           'файлы, лежащие в Telegram, помечены «Telegram».</div>'];
+    if(!мои.length)h.push('<div class="empty">пока пусто</div>');
+    мои.forEach(function(ф){
+      h.push('<div class="f"><div class="nm">🤖 '+String(ф.имя).replace(/[<>&]/g,"")+'</div>'+
+        '<div class="mt"><span>'+(ф.размер||"")+'</span><span>'+(ф.дата||"")+'</span>'+
+        '<span class="tag" style="color:var(--ok)">агент</span>'+(ф.где?'<span class="tag">'+ф.где+'</span>':'')+'</div>'+
+        '<div class="bar">'+(ф.ссылка?'<a class="p" style="text-decoration:none;text-align:center;padding:8px" href="'+ф.ссылка+'" target="_blank">Скачать</a>':
+        '<span style="font-size:12px;color:#8b97a8;padding:6px">лежит в Telegram — ссылку дам по слову</span>')+
+        '<button data-пер-агент="'+String(ф.имя).replace(/"/g,'')+'" title="переименовать">✎</button></div></div>');
+    });
+    box.innerHTML=h.join("");
+    box.querySelectorAll("[data-пер-агент]").forEach(function(к){
+      к.onclick=function(){
+        var старое=к.dataset.перАгент, т=prompt("Новое имя в разделе агента:",старое);
+        if(т===null||!т.trim())return;
+        var к2=карта(); к2["агент|"+старое]=т.trim();
+        try{localStorage.setItem(КЛЮЧ_ИМЁН,JSON.stringify(к2))}catch(e){}
+        (window.ФАЙЛЫ_АГЕНТА||[]).forEach(function(ф){if(ф.имя===старое)ф.имя=т.trim()});
+        перерисовать();
+      };
+    });
+    return true;
+  }
+
+  /* ---- раскраска: локальные имена + ✎ ✕ у папок ---- */
+  function раскрасить(){
+    try{
+      document.querySelectorAll("#список [data-пр]").forEach(function(э){
+        var ф=(ХР()?ХР().файлы():[])[+э.dataset.пр];
+        if(ф){var н=window.ЭТО_ИМЯ_ФАЙЛА(ф); if(н&&н!==э.textContent)э.textContent=н}
+      });
+    }catch(e){}
+    document.querySelectorAll("#папки .pap").forEach(function(э){
+      if(э.__v8||э.dataset.п==="__все"||э.dataset.п==="__меню"||э.dataset.п==="__разложить")return;
+      э.__v8=1;
+      var имя=decodeURIComponent(э.dataset.п);
+      var п=document.createElement("span"); п.textContent=" ✎"; п.title="переименовать";
+      п.style.cssText="margin-left:6px;color:#7fb2ff;cursor:pointer";
+      п.onclick=function(e){e.stopPropagation();e.preventDefault();window.переименоватьПапку(имя)};
+      var у=document.createElement("span"); у.textContent=" ✕"; у.title="удалить папку";
+      у.style.cssText="margin-left:4px;color:#ff5d5d;cursor:pointer";
+      у.onclick=function(e){e.stopPropagation();e.preventDefault();window.удалитьПапку(имя)};
+      э.appendChild(п); э.appendChild(у);
+    });
+  }
+
+  /* ---- вкладка «от агента» ---- */
+  document.addEventListener("click",function(e){
+    if(!e.target.closest("#вкладка-агент"))return;
+    e.preventDefault(); e.stopPropagation();
+    if(!ХР())return;
+    ХР().поставить({фильтр:"агент"});
+    document.querySelectorAll(".tab").forEach(function(т){т.classList.toggle("on",т.id==="вкладка-агент")});
+    перерисовать();
+  },true);
+
+  /* ---- принудительный показ всего ---- */
+  window.показатьВсё=function(){
+    if(!ХР())return;
+    ХР().поставить({активПапка:"",фильтр:"все",ВИД:"список"});
+    var п=document.getElementById("поиск"); if(п)п.value="";
+    document.querySelectorAll(".tab").forEach(function(т){т.classList.toggle("on",т.dataset.ф==="все")});
+    window.обновитьКрошки(); перерисовать();
+  };
+
+  /* ---- диагностика ---- */
+  window.диагностика=function(){
+    var с=ст()||{}, д={
+      версия:"v8.0", адрес:location.href,
+      вид:с.ВИД, фильтр:с.фильтр, папка:(с.активПапка||"(корень)"),
+      поиск:(document.getElementById("поиск")||{}).value||"",
+      файлов:(с.ВСЕ||[]).length,
+      встроенных:(ХР()?ХР().встроенныхВСписке():0),
+      на_экране:document.querySelectorAll("#список .f").length,
+      канал:(с.КАНАЛ||"нет"), ключ:(с.ТОКЕН?"есть":"нет"),
+      папки:(с.ПАПКИ||[]),
+      залито_в_памяти:Object.keys((function(){try{return JSON.parse(localStorage.getItem("залито")||"{}")}catch(e){return{}}})()).length
+    };
+    var т=JSON.stringify(д,null,1);
+    var ш=document.createElement("div");
+    ш.style.cssText="position:fixed;inset:0;z-index:10001;background:rgba(0,0,0,.6);display:flex;align-items:flex-end";
+    ш.innerHTML='<div style="background:#141a22;width:100%;border-radius:16px 16px 0 0;padding:14px;max-height:80vh;overflow:auto">'+
+      '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><b style="flex:1">Диагностика</b>'+
+      '<button id="д-к" style="padding:9px 12px">скопировать</button><button id="д-з" style="padding:9px 12px;background:#242c38">✕</button></div>'+
+      '<pre id="д-т" style="white-space:pre-wrap;font-size:12px;color:#c9d4e3"></pre></div>';
+    document.body.appendChild(ш);
+    ш.querySelector("#д-т").textContent=т;
+    ш.querySelector("#д-з").onclick=function(){ш.remove()};
+    ш.onclick=function(e){if(e.target===ш)ш.remove()};
+    ш.querySelector("#д-к").onclick=function(){
+      try{navigator.clipboard.writeText(т);ш.querySelector("#д-к").textContent="скопировано"}catch(e){}
+    };
+  };
+  document.addEventListener("click",function(e){if(e.target.closest("#диаг-кнопка"))window.диагностика()},true);
+
+  /* ---- обёртка нарисовать + наблюдатель ---- */
+  function обёртка(){
+    var х=ХР(); if(!х)return;
+    if(!х.нарисовать.__v8){
+      var ориг=х.нарисовать;
+      var нов=function(){ if(раздел()){раскрасить();return} ориг.apply(this,arguments); раскрасить(); window.обновитьКрошки(); };
+      нов.__v8=1; х.нарисовать=нов;
+    }
+    разгрузить(); раскрасить(); window.обновитьКрошки();
+  }
+  function старт(){
+    обёртка(); запомнить();
+    /* если браузер восстановил папку, в которой 0 файлов — выходим в корень:
+       именно это давало «на экране 0» при полном списке */
+    try{
+      var х=ХР(), с=х.взять();
+      if(с.активПапка && с.активПапка!=="__без" && х.счётВ(с.активПапка)===0){
+        х.поставить({активПапка:""});
+        window.обновитьКрошки(); х.нарисовать();
+        var б=document.createElement("div");
+        б.style.cssText="position:fixed;left:10px;right:10px;bottom:12px;z-index:9999;background:#1b2230;border:1px solid #2b3546;border-radius:12px;padding:10px;font-size:13px";
+        б.textContent="Папка «"+с.активПапка+"» была пустой — показал все файлы";
+        document.body.appendChild(б);
+        setTimeout(function(){if(б.parentNode)б.remove()},7000);
+      }
+    }catch(e){}
+
+    var н=new MutationObserver(function(){обёртка()});
+    ["папки","список"].forEach(function(ид){var э=document.getElementById(ид); if(э)н.observe(э,{childList:true})});
+    setTimeout(обёртка,500); setTimeout(обёртка,1500); setTimeout(обёртка,3000);
+  }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",старт); else старт();
+})();
+</script>
+
+
+<script>
+/* Файлы, которые залил агент. Имя, размер, дата, ссылка. Обновляется агентом. */
+window.ФАЙЛЫ_АГЕНТА = [
+ {имя:"ХРАНИЛИЩЕ v8.0 (этот файл)", размер:"≈380 КБ", дата:"11.11.2026", где:"GitHub Pages",
+  ссылка:"https://ayt1741.github.io/hranilishe/v8.0.html", пояснение:"последняя версия"},
+ {имя:"v7.2.html", размер:"377 КБ", дата:"11.11.2026", где:"GitHub Pages",
+  ссылка:"https://ayt1741.github.io/hranilishe/v7.2.html"},
+ {имя:"arex-0.11.2.zip (расширение экспорта Arena)", размер:"81 КБ", дата:"10.11.2026", где:"Telegram"},
+ {имя:"Полная переписка 1295 моментов", размер:"12,6 МБ", дата:"10.11.2026", где:"Telegram, архив"},
+ {имя:"Память (архив уборки 39,7 МБ)", размер:"39,7 МБ", дата:"10.11.2026", где:"Telegram, message_id 946"},
+ {имя:"Сборка для ПК (сборщик.py, УСТАНОВИТЬ.bat)", размер:"12 КБ", дата:"10.11.2026", где:"воркспейс ПК/"},
+ {имя:"Законы и факты (ФАКТЫ.md, СТАРТ.md)", размер:"28 КБ", дата:"11.11.2026", где:"память"},
+ {имя:"Отчёт: как читается 100% переписки", размер:"8 КБ", дата:"11.11.2026", где:"память/ПОИСК-100-полный-проход.md"}
+];
+</script>
+
+</body></html>
