@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Выгрузка файлов старого сайта</title>
+<style>
+ body{background:#0e1116;color:#e8edf5;font:14px/1.45 system-ui,sans-serif;margin:0;padding:16px}
+ .к{max-width:820px;margin:0 auto}
+ h1{font-size:18px;margin:0 0 6px}
+ .п{color:#8b95a7;font-size:12px;margin-bottom:14px}
+ button{padding:11px 15px;border-radius:10px;border:1px solid #2b3546;background:#1b2230;color:#e8edf5;font-size:14px;margin:0 8px 8px 0;cursor:pointer}
+ button.г{background:#2b5cff;color:#fff;border:0}
+ .строка{background:#141a22;border:1px solid #1d2532;border-radius:10px;padding:10px;margin-bottom:8px;font-size:13px}
+ .ок{color:#7fe0a8} .нет{color:#ff9b8a}
+ pre{background:#10151c;border:1px solid #1d2532;border-radius:10px;padding:10px;overflow:auto;font-size:12px;max-height:300px}
+</style></head><body><div class="к">
+<h1>📦 Выгрузка файлов старого сайта</h1>
+<div class="п">Эта страница только читает базу браузера и сохраняет список файлов в JSON. Ничего не удаляет и не меняет. Открой её по тому же адресу, где работал старый сайт (или с диска, если старый сайт открывался файлом).</div>
+
+<button class="г" id="скан">🔎 найти базы в этом адресе</button>
+<button id="выгр">⬇ сохранить список файлов (JSON)</button>
+<button id="все">📤 сохранить ВСЕ базы (страховка)</button>
+
+<div id="итог"></div>
+<pre id="лог"></pre>
+</div>
+<script>
+var НАЙДЕНО={базы:[], файлы:[], папки:{}, превью:0};
+function l(т){ var э=document.getElementById("лог"); э.textContent+=(э.textContent?"\n":"")+т }
+function h(s){ return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]}) }
+
+function именаБаз(){
+  if(indexedDB.databases) return indexedDB.databases().then(function(р){ return (р||[]).map(function(д){ return д.name }) });
+  return Promise.resolve(["tgdrive"]);   // старые движки: пробуем по имени
+}
+function открыть(имя){
+  return new Promise(function(да,нет){
+    var з=indexedDB.open(имя);           // без версии: апгрейд не запускается
+    з.onsuccess=function(){ да(з.result) };
+    з.onerror=function(){ нет(з.error) };
+    з.onblocked=function(){ нет(new Error("база занята другой вкладкой — закрой старый сайт и повтори")) };
+  });
+}
+function всё(db,имя){
+  return new Promise(function(да){
+    if(!db.objectStoreNames.contains(имя)){ да([]); return }
+    var з=db.transaction(имя,"readonly").objectStore(имя).openCursor(), out=[];
+    з.onsuccess=function(e){ var к=e.target.result; if(к){ out.push(к.value); к.continue() } else да(out) };
+    з.onerror=function(){ да([]) };
+  });
+}
+
+function базыСОжиданием(попыток){
+  попыток=попыток||0;
+  return именаБаз().then(function(имена){
+    /* база может ещё создаваться в соседней вкладке — ждём и пробуем снова */
+    if(!имена.length && попыток<4) return new Promise(function(д){ setTimeout(д,700) }).then(function(){ return базыСОжиданием(попыток+1) });
+    return имена;
+  });
+}
+
+function скан(){
+  document.getElementById("итог").innerHTML="";
+  return базыСОжиданием().then(function(имена){
+    l("в этом адресе баз: "+имена.length+(имена.length?(" — "+имена.join(", ")):""));
+    return имена.reduce(function(цеп,имя){
+      return цеп.then(function(){
+        return открыть(имя).then(function(db){
+          var стор=[].slice.call(db.objectStoreNames);
+          l("· "+имя+" версия "+db.version+" · хранилища: "+стор.join(", "));
+          var об={имя:имя, версия:db.version, стор:стор, файлов:0};
+          if(стор.indexOf("files")<0){ db.close(); НАЙДЕНО.базы.push(об); return }
+          return Promise.all([всё(db,"files"), всё(db,"folders"), всё(db,"thumbs")]).then(function(р){
+            db.close();
+            об.файлов=р[0].length;
+            if(р[0].length){
+              НАЙДЕНО.файлы=р[0]; НАЙДЕНО.превью=р[2].length; НАЙДЕНО.папки={};
+              р[1].forEach(function(п){ НАЙДЕНО.папки[String(п.id)]=п.title||("папка "+п.id) });
+              НАЙДЕНО.базы.push(об);
+              l("   ✅ файлов "+р[0].length+", папок "+р[1].length+", превью "+р[2].length);
+            }
+          });
+        }).catch(function(e){ l("· "+имя+" — не открылась: "+(e&&e.message||e)) });
+      });
+    }, Promise.resolve()).then(function(){
+      НАЙДЕНО.базы.forEach(function(б){ if(!НАЙДЕНО.базы.файлов){} });
+      показать();
+    });
+  });
+}
+
+function показать(){
+  var и=document.getElementById("итог"), т=[];
+  if(!НАЙДЕНО.файлы.length){
+    т.push('<div class="строка нет">Файлов не найдено. Значит база старого сайта лежит в другом адресе (другой сайт/порт/профиль браузера) — открой эту страницу <b>там, где открывался старый сайт</b>, и нажми «найти базы» снова.</div>');
+    т.push('<div class="строка">Найдено баз: '+НАЙДЕНО.базы.length+'</div>');
+  }else{
+    var размер=НАЙДЕНО.файлы.reduce(function(а,ф){ return а+(ф.size||0) },0);
+    т.push('<div class="строка ок">✅ Найдено <b>'+НАЙДЕНО.файлы.length+'</b> файлов · '+
+      (размер/1048576).toFixed(1)+' МБ · папок '+Object.keys(НАЙДЕНО.папки).length+
+      ' · готовых превью '+НАЙДЕНО.превью+'</div>');
+    т.push('<div class="строка">Дальше: нажми «⬇ сохранить список файлов (JSON)», затем открой ХРАНИЛИЩЕ v8 → вкладка «📦 со старого сайта» → «⬆ загрузить список». Там будет кнопка переноса в «Фото».</div>');
+  }
+  и.innerHTML=т.join("");
+}
+
+function скачать(данные,имя){
+  var б=new Blob([JSON.stringify(данные)],{type:"application/json"});
+  var а=document.createElement("a"); а.href=URL.createObjectURL(б); а.download=имя;
+  document.body.appendChild(а); а.click(); а.remove();
+}
+
+document.getElementById("скан").onclick=function(){ НАЙДЕНО={базы:[],файлы:[],папки:{},превью:0}; document.getElementById("лог").textContent=""; скан() };
+
+document.getElementById("выгр").onclick=function(){
+  if(!НАЙДЕНО.файлы.length){ l("сначала нажми «найти базы» и убедись, что файлы найдены"); return }
+  скачать({вид:"хранилище-старое", версия:1, когда:new Date().toISOString(),
+    папки:НАЙДЕНО.папки,
+    файлы:НАЙДЕНО.файлы.map(function(ф){
+      return {id:String(ф.id), folderId:String(ф.folderId||""), папка:НАЙДЕНО.папки[String(ф.folderId)]||"",
+              messageId:ф.messageId, messageIds:ф.messageIds||null,
+              name:ф.name||"", size:ф.size||0, mimeType:ф.mimeType||"", date:ф.date||0}
+    })}, "старый-сайт-файлы.json");
+  l("сохранено: старый-сайт-файлы.json · файлов "+НАЙДЕНО.файлы.length);
+};
+
+document.getElementById("все").onclick=function(){
+  базыСОжиданием().then(function(имена){
+    var всёД={когда:new Date().toISOString(), базы:[]};
+    return имена.reduce(function(ц,имя){ return ц.then(function(){
+      return открыть(имя).then(function(db){
+        var стор=[].slice.call(db.objectStoreNames);
+        return стор.reduce(function(ц2,с){ return ц2.then(function(){
+          return всё(db,с).then(function(строки){ всёД.базы.push({имя:имя, стор:с, строки:строки}) });
+        })},Promise.resolve()).then(function(){ db.close() });
+      }).catch(function(){});
+    })},Promise.resolve()).then(function(){ скачать(всёД,"все-базы-страховка.json"); l("сохранены все базы") });
+  });
+};
+
+скан();
+</script></body></html>
