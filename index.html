@@ -75,7 +75,7 @@ footer button{flex:1 1 45%;min-width:140px}
 </style></head><body>
 
 <header>
-  <h1><span>ХРАНИЛИЩЕ <span id="версия" style="font-size:11px;color:#8b97a8">v8.0 · 11.11</span> <span id="диаг-кнопка" style="font-size:12px;color:#7fb2ff;border:1px solid #2b3546;border-radius:8px;padding:1px 7px;margin-right:4px">ⓘ</span> <span id="ключ-кнопка" style="font-size:12px;color:#7fb2ff;border:1px solid #2b3546;border-radius:8px;padding:1px 7px">🔑 ключ</span></span><span id="связь" style="font-size:11px;color:var(--dim)">проверяю…</span></h1>
+  <h1><span>ХРАНИЛИЩЕ <span id="версия" style="font-size:11px;color:#8b97a8">v8.2</span> <span id="диаг-кнопка" style="font-size:12px;color:#7fb2ff;border:1px solid #2b3546;border-radius:8px;padding:1px 7px;margin-right:4px">ⓘ</span> <span id="ключ-кнопка" style="font-size:12px;color:#7fb2ff;border:1px solid #2b3546;border-radius:8px;padding:1px 7px">🔑 ключ</span></span><span id="связь" style="font-size:11px;color:var(--dim)">проверяю…</span></h1>
   <div class="sub" id="счёт">загрузка…</div>
   <div id="навигация" style="display:flex;align-items:center;gap:6px;margin:6px 0 2px">
     <button id="назад" title="назад" style="flex:0 0 auto;padding:6px 12px;font-size:14px">←</button>
@@ -4803,4 +4803,497 @@ window.ФАЙЛЫ_АГЕНТА = [
   window.__СТАРОЕ={ прочитать:прочитать, показать:показать, состояние:function(){ return СТ } };
 })();
 </script>
+<style id="ш-стиль">
+body{padding-bottom:0!important}
+header,footer#подвал-главный{display:none!important}
+#журнал{display:none!important}
+#ш{display:flex;flex-direction:column;min-height:100vh}
+#ш-верх{position:sticky;top:0;z-index:9;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:9px 14px;background:rgba(14,17,22,.97);border-bottom:1px solid var(--line)}
+#ш-лого{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px}
+#ш-знак{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,#2b6cff,#33c48d);
+  display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff}
+#ш-вер{font-size:10px;color:var(--dim);font-weight:500;border:1px solid var(--line);border-radius:6px;padding:1px 5px}
+#ш-нав{display:flex;gap:3px;background:#131821;border:1px solid var(--line);border-radius:11px;padding:3px}
+.ш-п{background:transparent;padding:7px 13px;font-size:13.5px;border-radius:8px;color:var(--dim);font-weight:600}
+.ш-п.on{background:var(--acc);color:#fff}
+#ш-право{margin-left:auto;display:flex;align-items:center;gap:8px}
+#ш-право #связь{font-size:11px;color:var(--dim)}
+.ш-мел{font-size:12px;padding:6px 10px;background:#131821;border:1px solid var(--line);color:#9fb6d6;font-weight:500}
+#ш-право #ключ-кнопка,#ш-право #диаг-кнопка{font-size:12px;cursor:pointer}
+#ш-тело{flex:1;width:100%;max-width:1180px;margin:0 auto;padding:14px 16px 96px}
+.ш-стр{display:none}
+.ш-стр.on{display:block}
+.ш-линия{display:flex;align-items:center;gap:8px;margin:10px 0 8px;font-size:12px;color:var(--dim);flex-wrap:wrap}
+.ш-карт{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+.ш-к-т{font-size:13px;font-weight:700;color:#cfdaea;margin-bottom:8px;letter-spacing:.2px}
+.ш-к-п{font-size:12.5px;color:var(--dim);line-height:1.5}
+.ш-сел{width:100%;padding:12px;border-radius:11px;border:1px solid var(--line);background:#0b0e13;
+  color:var(--txt);font-size:15px;font-family:inherit;font-weight:600}
+.ш-зона{background:#101722;border:2px dashed #2b3a4f;border-radius:16px;padding:30px 16px;text-align:center;margin-bottom:12px}
+.ш-зона.над{background:#152238;border-color:var(--acc)}
+.ш-з-и{font-size:30px;line-height:1}
+.ш-з-т{font-size:16px;font-weight:700;margin-top:8px}
+.ш-з-п{font-size:12.5px;color:var(--dim);margin:4px 0 14px}
+.ш-з-б{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.ш-сетка{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
+.ш-пап{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:12px}
+.ш-пап-и{font-weight:650;font-size:14px;word-break:break-word}
+.ш-пап-м{font-size:11.5px;color:var(--dim);margin-top:3px}
+.ш-пап-б{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.ш-пап-б button{font-size:11.5px;padding:6px 9px;font-weight:600}
+.ш-ряд{display:flex;align-items:center;gap:10px;padding:11px 13px;background:var(--card);
+  border:1px solid var(--line);border-radius:12px;margin-bottom:8px}
+.ш-ряд-т{flex:1;min-width:0}
+.ш-ряд-н{font-weight:600;font-size:14px}
+.ш-ряд-п{font-size:11.5px;color:var(--dim);margin-top:2px}
+.ш-ряд button{font-size:12px;padding:8px 11px;font-weight:600;white-space:nowrap}
+#прогресс{position:fixed!important;left:50%;transform:translateX(-50%);bottom:14px;
+  width:min(620px,94vw);margin:0!important;z-index:60;box-shadow:0 12px 40px rgba(0,0,0,.6)}
+#ш-список-хост main{padding:0!important;padding-bottom:20px!important}
+#ш-files-действия{display:none}
+@media(min-width:760px){
+  #ш-тело{padding-bottom:24px}
+}
+@media(max-width:720px){
+  #ш-верх{padding:8px 10px;gap:8px}
+  #ш-нав{order:3;width:100%;justify-content:space-between}
+  .ш-п{flex:1;text-align:center;padding:8px 4px;font-size:12.5px}
+  #ш-тело{padding:10px 10px 96px}
+}
+</style>
+
+<div id="ш">
+  <div id="ш-верх">
+    <div id="ш-лого"><span id="ш-знак">Х</span><span>ХРАНИЛИЩЕ</span><b id="ш-вер">v8.2</b></div>
+    <div id="ш-нав">
+      <button class="ш-п on" data-п="файлы">📁 Файлы</button>
+      <button class="ш-п" data-п="папки">🗂 Папки</button>
+      <button class="ш-п" data-п="залить">⬆ Загрузить</button>
+      <button class="ш-п" data-п="ещё">⋯ Ещё</button>
+    </div>
+    <div id="ш-право"></div>
+  </div>
+
+  <div id="ш-тело">
+
+    <section class="ш-стр on" data-стр="файлы">
+      <div id="ш-х-поиск"></div>
+      <div id="ш-х-папки"></div>
+      <div id="ш-х-табы"></div>
+      <div class="ш-линия" id="ш-линия"></div>
+      <div id="ш-х-список"></div>
+      <div id="ш-х-действия"></div>
+    </section>
+
+    <section class="ш-стр" data-стр="папки">
+      <div class="ш-карт" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div style="flex:1;min-width:160px">
+          <div class="ш-к-т" style="margin:0">Папки</div>
+          <div class="ш-к-п" id="ш-папки-итог">—</div>
+        </div>
+        <button class="p" id="ш-новая">＋ Новая папка</button>
+      </div>
+      <div class="ш-сетка" id="ш-папки-сетка"></div>
+    </section>
+
+    <section class="ш-стр" data-стр="залить">
+      <div class="ш-карт">
+        <div class="ш-к-т">Куда заливается</div>
+        <select class="ш-сел" id="ш-куда"></select>
+        <div class="ш-к-п" id="ш-куда-п" style="margin-top:8px"></div>
+      </div>
+
+      <div class="ш-зона" id="ш-зона">
+        <div class="ш-з-и">⬆</div>
+        <div class="ш-з-т">Перетащи файлы сюда</div>
+        <div class="ш-з-п">или выбери на диске — можно сразу много</div>
+        <div class="ш-з-б">
+          <button class="p" id="ш-выбрать">Выбрать файлы</button>
+          <button id="ш-фото-кн">Только фото и видео</button>
+        </div>
+      </div>
+
+      <div class="ш-карт">
+        <div class="ш-к-т">Файлы больше 50 МБ — сам порежу</div>
+        <div class="ш-к-п">У бота Telegram потолок 50 МБ на сообщение, поэтому большой файл режется на части по 45 МБ и при скачивании склеивается обратно. Файл 3 ГБ = 69 частей, ничего нажимать не нужно.</div>
+      </div>
+
+      <div class="ш-карт">
+        <div class="ш-к-т">Что происходит сейчас</div>
+        <div class="ш-к-п" id="ш-сейчас">ничего не заливается</div>
+      </div>
+    </section>
+
+    <section class="ш-стр" data-стр="ещё">
+      <div class="ш-карт">
+        <div class="ш-к-т">Подключение</div>
+        <div class="ш-ряд"><div class="ш-ряд-т"><div class="ш-ряд-н">Ключ бота</div>
+          <div class="ш-ряд-п">без него файлы никуда не уходят</div></div>
+          <button class="p" id="ш-е-ключ">открыть</button></div>
+        <div class="ш-ряд"><div class="ш-ряд-т"><div class="ш-ряд-н">Канал-хранилище</div>
+          <div class="ш-ряд-п" id="ш-е-канал-п">—</div></div>
+          <button id="ш-е-канал">настроить</button></div>
+        <div class="ш-ряд"><div class="ш-ряд-т"><div class="ш-ряд-н">Связь с Telegram</div>
+          <div class="ш-ряд-п" id="ш-е-связь">—</div></div>
+          <button id="ш-е-пров">проверить</button></div>
+      </div>
+
+      <div class="ш-карт">
+        <div class="ш-к-т">Инструменты</div>
+        <div class="ш-ряд"><div class="ш-ряд-т"><div class="ш-ряд-н">Собрать все мои файлы</div>
+          <div class="ш-ряд-п">пройти по каналу и найти всё, что я заливал</div></div>
+          <button id="ш-е-обход">запустить</button></div>
+        <div class="ш-ряд"><div class="ш-ряд-т"><div class="ш-ряд-н">Ссылка на папку</div>
+          <div class="ш-ряд-п">публичная ссылка на выбранную папку</div></div>
+          <button id="ш-е-ссылка">получить</button></div>
+        <div class="ш-ряд"><div class="ш-ряд-т"><div class="ш-ряд-н">Скачать всё списком</div>
+          <div class="ш-ряд-п">CSV/JSON со всеми файлами</div></div>
+          <button id="ш-е-список">выгрузить</button></div>
+        <div class="ш-ряд"><div class="ш-ряд-т"><div class="ш-ряд-н">Разложить по типам</div>
+          <div class="ш-ряд-п">ручная раскладка: картинки в «Фото»</div></div>
+          <button id="ш-е-разложить">разложить</button></div>
+      </div>
+
+      <div class="ш-карт">
+        <div class="ш-к-т">Служебное</div>
+        <div class="ш-ряд"><div class="ш-ряд-т"><div class="ш-ряд-н">Корзина</div>
+          <div class="ш-ряд-п">удалённые файлы, можно вернуть</div></div>
+          <button id="ш-е-корзина">открыть</button></div>
+        <div class="ш-ряд"><div class="ш-ряд-т"><div class="ш-ряд-н">Избранное</div>
+          <div class="ш-ряд-п">файлы со звёздочкой</div></div>
+          <button id="ш-е-избранное">открыть</button></div>
+        <div class="ш-ряд"><div class="ш-ряд-т"><div class="ш-ряд-н">Статистика</div>
+          <div class="ш-ряд-п">сколько файлов и объём</div></div>
+          <button id="ш-е-стат">показать</button></div>
+        <div class="ш-ряд"><div class="ш-ряд-т"><div class="ш-ряд-н">Сортировка и вид</div>
+          <div class="ш-ряд-п">по дате / имени / размеру, список или плитка</div></div>
+          <button id="ш-е-вид">настроить</button></div>
+        <div class="ш-ряд"><div class="ш-ряд-т"><div class="ш-ряд-н">Мусорные файлы</div>
+          <div class="ш-ряд-п">служебные .json/.md от агента</div></div>
+          <button id="ш-е-мусор">показать</button></div>
+        <div class="ш-ряд"><div class="ш-ряд-т"><div class="ш-ряд-н">Диагностика</div>
+          <div class="ш-ряд-п">что видит страница: папки, ключ, канал</div></div>
+          <button id="ш-е-диаг">открыть</button></div>
+      </div>
+
+      <div class="ш-карт" id="ш-х-настройки-карт">
+        <div class="ш-к-т">Сортировка, вид, фильтры</div>
+        <div id="ш-х-настройки"></div>
+      </div>
+
+      <div class="ш-карт">
+        <div class="ш-к-т">Старый сайт</div>
+        <div class="ш-к-п">Старые фото остаются на старом сайте — он открывается отдельной страницей.</div>
+        <div class="ш-пап-б"><a href="old.html"><button>Открыть старый сайт</button></a></div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<script>
+/* ================= v8.1 ОБОЛОЧКА: страницы, меню, понятная заливка ================= */
+(function(){
+  if(window.__Ш81)return; window.__Ш81=1;
+  function $(и){return document.getElementById(и)}
+  function ХР(){return window.__ХР||null}
+  function ст(){var х=ХР();return х?х.взять():{}}
+  function экр(т){return String(т==null?"":т).replace(/[<>&]/g,function(c){return{"<":"&lt;",">":"&gt;","&":"&amp;"}[c]})}
+  function фсл(n){n=+n||0;var a=n%10,b=n%100;return a===1&&b!==11?" файл":((a>=2&&a<=4)&&(b<10||b>=20)?" файла":" файлов")}
+  function разм(б){б=б||0;if(б<1024)return б+" Б";if(б<1048576)return (б/1024).toFixed(0)+" КБ";
+    if(б<1073741824)return (б/1048576).toFixed(1)+" МБ";return (б/1073741824).toFixed(2)+" ГБ"}
+
+  /* ---------- 1. переносим существующие узлы в новую оболочку ---------- */
+  function перенести(ид,куда){
+    var э=$(ид), к=typeof куда==="string"?$(куда):куда;
+    if(э&&к){к.appendChild(э);return true}
+    return false;
+  }
+  var верх=document.querySelector("header");
+  var ряды=верх?верх.querySelectorAll(".row"):[];
+  /* шапка: версия, ключ, диагностика, связь — в правый угол */
+  ["версия","ключ-кнопка","диаг-кнопка","связь"].forEach(function(ид){
+    var э=$(ид); if(э&&$("ш-право"))$("ш-право").appendChild(э);
+  });
+  перенести("поиск","ш-х-поиск");
+  перенести("папки","ш-х-папки");
+  if(ряды[0])$("ш-х-табы").appendChild(ряды[0]);
+  перенести("навигация","ш-линия");
+  перенести("крошки","ш-линия");
+  перенести("счёт","ш-линия");
+  перенести("список","ш-х-список");
+  if(ряды[2])$("ш-х-действия").appendChild(ряды[2]);
+  /* «ещё»-настройки старой шапки — в страницу «Ещё» */
+  [3,4].forEach(function(н){
+    if(!ряды[н]||!$("ш-х-настройки"))return;
+    $("ш-х-настройки").appendChild(ряды[н]);
+    ряды[н].style.cssText="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap";
+  });
+  if($("ш-е-вид"))$("ш-е-вид").onclick=function(){
+    var к=$("ш-х-настройки-карт"); if(к)к.scrollIntoView({block:"center"});
+  };
+
+  /* поиск и строки — компактнее */
+  if($("поиск"))$("поиск").style.marginTop="0";
+  if(ряды[0])ряды[0].style.marginTop="0";
+  if($("папки"))$("папки").style.margin="8px 0 0";
+  if($("ряд-скачать"))$("ряд-скачать").style.marginTop="12px";
+
+  /* ---------- 2. страницы ---------- */
+  var текущая="файлы";
+  function показать(имя){
+    текущая=имя;
+    document.querySelectorAll("#ш-нав .ш-п").forEach(function(к){к.classList.toggle("on",к.dataset.п===имя)});
+    document.querySelectorAll("#ш-тело .ш-стр").forEach(function(с){с.classList.toggle("on",с.dataset.стр===имя)});
+    if(имя==="файлы"){страховка();try{window.обновитьКрошки&&window.обновитьКрошки()}catch(e){}}
+    if(имя==="папки")нарисоватьПапки();
+    if(имя==="залить"){селект();кудаПодпись();сейчас()}
+    if(имя==="ещё")ещёДанные();
+    try{localStorage.setItem("ш-страница",имя)}catch(e){}
+    window.scrollTo(0,0);
+  }
+  window.ш_показать=показать;
+  document.addEventListener("click",function(e){
+    var к=e.target.closest("#ш-нав .ш-п"); if(!к)return;
+    показать(к.dataset.п);
+  },true);
+
+  /* ---------- 3. «Куда заливается» ---------- */
+  function селект(){
+    var с=$( "ш-куда"); if(!с)return;
+    var о=ст(), папки=(о.ПАПКИ||[]).slice(), акт=о.активПапка||"";
+    if(акт && акт!=="__без" && папки.indexOf(акт)<0)папки.push(акт);
+    var html='<option value="">без папки (просто в хранилище)</option>';
+    папки.forEach(function(п){
+      var n=0;try{n=ХР().счётВ(п)}catch(e){}
+      html+='<option value="'+экр(п)+'"'+(п===акт?" selected":"")+">"+экр(п)+" — "+n+фсл(n)+"</option>";
+    });
+    с.innerHTML=html;
+    с.onchange=function(){
+      var х=ХР(); if(!х)return;
+      х.поставить({активПапка:с.value||""});
+      try{х.нарисовать()}catch(e){}
+      if(х.перерисоватьПапки)х.перерисоватьПапки();
+      try{window.обновитьКрошки&&window.обновитьКрошки()}catch(e){}
+      кудаПодпись(); нарисоватьПапки();
+    };
+  }
+  function кудаПодпись(){
+    var о=ст(), акт=о.активПапка||"", п=$("ш-куда-п"), х=ХР();
+    if(!п)return;
+    if(акт){var n=0;try{n=х.счётВ(акт)}catch(e){}
+      п.innerHTML="Файлы лягут в папку <b style='color:#8fe3bd'>«"+экр(акт)+"»</b>"+
+        " (в ней уже "+n+"). Об открытой папке всегда пишет и карточка заливки внизу.";}
+    else п.innerHTML="Папка не выбрана — файлы лягут <b>без папки</b>, чтобы ничего не перекладывать самовольно.";
+  }
+
+  /* ---------- 4. заливка ---------- */
+  if($("ш-выбрать"))$("ш-выбрать").onclick=function(){var в=$("выбор");if(в){в.value="";в.click()}};
+  if($("ш-фото-кн"))$("ш-фото-кн").onclick=function(){var в=$("выбор2");if(в){в.value="";в.click()}};
+  var зона=$("ш-зона");
+  if(зона){
+    ["dragenter","dragover"].forEach(function(т){зона.addEventListener(т,function(e){e.preventDefault();зона.classList.add("над")})});
+    ["dragleave","drop"].forEach(function(т){зона.addEventListener(т,function(e){e.preventDefault();зона.classList.remove("над")})});
+    зона.addEventListener("drop",function(e){
+      var ф=e.dataTransfer&&e.dataTransfer.files;
+      if(!ф||!ф.length)return;
+      var х=ХР();
+      if(х&&х.запустить)х.запустить(Array.prototype.slice.call(ф));
+    });
+    зона.onclick=function(e){if(e.target.closest("button"))return;var в=$("выбор");if(в){в.value="";в.click()}};
+  }
+
+  /* зеркало прогресса и блок «что происходит сейчас» */
+  function сейчас(){
+    var э=$("ш-сейчас"); if(!э)return;
+    var п=$("прогресс"), идёт=п&&getComputedStyle(п).display!=="none";
+    if(!идёт){э.innerHTML="ничего не заливается.";return}
+    э.innerHTML="<b>"+экр(($("пкуда")||{}).textContent||"")+"</b><br>"+
+      экр(($("псводка")||{}).textContent||"")+"<br>"+
+      экр(($("пфайл")||{}).textContent||"")+" · "+экр(($("ппроц")||{}).textContent||"")+
+      "<br>"+экр(($("пмб")||{}).textContent||"")+" · "+экр(($("псчёт")||{}).textContent||"");
+  }
+  var прог=$("прогресс");
+  if(прог){
+    var набл=new MutationObserver(function(){сейчас()});
+    набл.observe(прог,{childList:true,subtree:true,characterData:true,attributes:true});
+    setInterval(сейчас,900);
+  }
+
+  /* ---------- 5. страница «Папки» ---------- */
+  function нарисоватьПапки(){
+    var сетка=$("ш-папки-сетка"); if(!сетка)return;
+    var о=ст(), папки=(о.ПАПКИ||[]).slice(), файлы=о.ВСЕ||[], акт=о.активПапка||"";
+    var без=0, всего=0;
+    function пф(ф){try{return ХР().папкаФайла(ф)||""}catch(e){return ф.п||""}}
+    файлы.forEach(function(ф){всего+=ф.р||0; if(!пф(ф))без++});
+    $("ш-папки-итог").textContent="папок: "+папки.length+" · файлов: "+файлы.length+" · без папки: "+без+
+      " · объём: "+разм(всего);
+    if(!папки.length){
+      сетка.innerHTML='<div class="ш-карт ш-к-п">папок пока нет — нажми «＋ Новая папка» или залей файлы, указав папку.</div>';
+      return;
+    }
+    var html="";
+    папки.forEach(function(п){
+      var вП=файлы.filter(function(ф){return пф(ф)===п}), об=вП.reduce(function(a,ф){return a+(ф.р||0)},0);
+      html+='<div class="ш-пап" data-имя="'+экр(п)+'">'+
+        '<div class="ш-пап-и">📁 '+экр(п)+'</div>'+
+        '<div class="ш-пап-м">'+вП.length+фсл(вП.length)+' · '+разм(об)+(п===акт?' · <span style="color:#8fe3bd">открыта</span>':'')+'</div>'+
+        '<div class="ш-пап-б">'+
+          '<button class="p" data-откр="'+экр(п)+'">открыть</button>'+
+          '<button data-зал="'+экр(п)+'">заливать сюда</button>'+
+          '<button data-пм="'+экр(п)+'">✎</button>'+
+          '<button data-уд="'+экр(п)+'">🗑</button>'+
+        '</div></div>';
+    });
+    сетка.innerHTML=html;
+    сетка.querySelectorAll("[data-откр]").forEach(function(к){к.onclick=function(){
+      ХР().поставить({активПапка:к.dataset.откр});try{ХР().нарисовать()}catch(e){}
+      window.обновитьКрошки&&window.обновитьКрошки();показать("файлы")}});
+    сетка.querySelectorAll("[data-зал]").forEach(function(к){к.onclick=function(){
+      ХР().поставить({активПапка:к.dataset.зал});try{ХР().нарисовать()}catch(e){}
+      window.обновитьКрошки&&window.обновитьКрошки();показать("залить")}});
+    сетка.querySelectorAll("[data-пм]").forEach(function(к){к.onclick=function(){
+      window.переименоватьПапку&&window.переименоватьПапку(к.dataset.пм);setTimeout(нарисоватьПапки,300)}});
+    сетка.querySelectorAll("[data-уд]").forEach(function(к){к.onclick=function(){
+      window.удалитьПапку&&window.удалитьПапку(к.dataset.уд);setTimeout(нарисоватьПапки,300)}});
+  }
+  if($("ш-новая"))$("ш-новая").onclick=function(){
+    var имя=prompt("Имя новой папки:",""); if(имя===null)return; имя=имя.trim().slice(0,40);
+    if(!имя)return;
+    try{ХР().создатьПапку(имя)}catch(e){}
+    try{ХР().перерисоватьПапки();ХР().нарисовать()}catch(e){}
+    нарисоватьПапки(); селект(); кудаПодпись();
+  };
+
+  /* ---------- 6. страница «Ещё» ---------- */
+  function наж(ид){var э=$(ид);if(э){э.click();return true}return false}
+  [["ш-е-ключ","ключ-кнопка"],["ш-е-обход","обход"],["ш-е-ссылка","ссылка-папки"],
+   ["ш-е-список","ск-всё"],["ш-е-корзина","корзина-кн"],["ш-е-избранное","избранное-кн"],
+   ["ш-е-стат","стат"],["ш-е-мусор","служебное"],["ш-е-диаг","диаг-кнопка"]
+  ].forEach(function(п){
+    var к=$(п[0]); if(к)к.onclick=function(){ if(!наж(п[1]))alert("Кнопка недоступна на этой сборке") };
+  });
+  if($("ш-е-разложить"))$("ш-е-разложить").onclick=function(){
+    try{var n=ХР().разложить?0:0}catch(e){}
+    var к=$("кнопка-вфото"); if(к)к.click();
+  };
+  if($("ш-е-канал"))$("ш-е-канал").onclick=function(){наж("ключ-кнопка")};
+  if($("ш-е-пров"))$("ш-е-пров").onclick=function(){наж("диаг-кнопка")};
+  function ещёДанные(){
+    var о=ст();
+    if($("ш-е-канал-п"))$("ш-е-канал-п").textContent=о.КАНАЛ?("канал "+о.КАНАЛ):"не задан — файлы идут в личный чат с ботом";
+    if($("ш-е-связь"))$("ш-е-связь").textContent=о.ТОКЕН?"ключ есть, канал "+(о.КАНАЛ||"не задан"):"ключ не введён";
+  }
+
+  /* ---------- 7. страховка: файлы обязаны быть видны ---------- */
+  function страховка(){
+    var сп=$("список"); if(!сп)return;
+    var строк=сп.querySelectorAll(".f").length;
+    var счёт=($("счёт")||{}).textContent||"";
+    var м=счёт.match(/на экране (\d+)/); var наЭкране=м?+м[1]:0;
+    if(строк>0||наЭкране===0)return;
+    var о=ст(), акт=о.активПапка||"";
+    function пф2(ф){try{return ХР().папкаФайла(ф)||""}catch(e){return ф.п||""}}
+    var файлы=(о.ВСЕ||[]).filter(function(ф){
+      if(акт==="__без")return !пф2(ф);
+      if(акт)return пф2(ф)===акт;
+      return true;
+    });
+    if(!файлы.length)return;
+    var html='<div class="ш-карт" style="border-color:#5a4a20;background:#1e1a12">'+
+      '<div class="ш-к-т" style="color:#ffcf87">список не отрисовался — показываю напрямую</div>'+
+      '<div class="ш-к-п">файлов: '+файлы.length+'</div></div>';
+    файлы.slice(0,300).forEach(function(ф){
+      html+='<div class="f" style="border-color:#2b3546"><div class="nm">'+экр(ф.и||"?")+'</div>'+
+        '<div class="mt"><span>'+разм(ф.р||0)+'</span>'+(пф2(ф)?'<span class="tag" style="color:#33c48d">📁 '+экр(пф2(ф))+'</span>':'<span class="tag">без папки</span>')+'</div></div>';
+    });
+    сп.innerHTML=html;
+    try{window.__Ш_СТРАХОВКА=(window.__Ш_СТРАХОВКА||0)+1}catch(e){}
+  }
+  window.ш_страховка=страховка;
+
+  /* ---------- 8. старт ---------- */
+  function старт(){
+    var х=ХР();
+    if(х){
+      if(!х.нарисовать.__ш81){
+        var ориг=х.нарисовать;
+        var нов=function(){ориг.apply(this,arguments);setTimeout(страховка,40)};
+        нов.__ш81=1; х.нарисовать=нов;
+      }
+    }
+    селект(); кудаПодпись(); нарисоватьПапки(); сейчас(); ещёДанные();
+    try{показать(localStorage.getItem("ш-страница")||"файлы")}catch(e){показать("файлы")}
+    setInterval(function(){try{селект();кудаПодпись()}catch(e){}},2500);
+  }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",function(){setTimeout(старт,120)});
+  else setTimeout(старт,120);
+})();
+</script>
+
+
+<style id="ш-стиль-82">
+/* --- v8.2: файлы компактнее, один ряд кнопок, ничего лишнего в шапке --- */
+.f{padding:9px 11px!important;margin-bottom:6px!important}
+.f .nm{font-size:13.5px}
+.f .mt{font-size:11.5px;gap:7px;margin-top:2px}
+.f .bar{margin-top:7px;gap:6px}
+.f .bar button{font-size:12px;padding:6px 10px;border-radius:8px}
+.f .bar button[data-пер],.f .bar button[data-изб],.f .bar button[data-тр]{padding:6px 9px}
+#папки [data-п="__разложить"],#папки [data-п="__меню"]{display:none!important}
+#версия{display:none!important}
+#ш-линия{gap:10px;margin:8px 0 4px}
+#ш-линия #навигация{margin:0!important;flex:0 0 auto}
+#ш-линия #навигация button{padding:5px 9px!important;font-size:12px!important}
+#ш-линия #крошки{margin:0!important;font-size:12px.5;color:#8b97a8;flex:1 1 200px}
+#ш-линия #счёт{margin:0!important;font-size:11.5px;text-align:right;flex:0 0 auto}
+#ряд-скачать{display:none!important}
+#список .f:hover{border-color:#31415a}
+@media(max-width:720px){
+  .f .bar{flex-wrap:wrap}
+  .f .bar button{flex:1 1 auto}
+  #ш-линия{flex-wrap:wrap}
+  #ш-линия #счёт{width:100%;text-align:left}
+}
+</style>
+<div id="ш-лог"></div>
+<script>
+/* v8.2: кнопки выгрузки переехали в «Ещё», карточки файлов — в один ряд */
+(function(){
+  function $(и){return document.getElementById(и)}
+  function ХР(){return window.__ХР||null}
+  window.ш_лог=function(т){
+    var э=$("ш-лог"); if(!э)return;
+    э.innerHTML=(т?'<div class="ш-карт" style="border-color:#2b3a4f;margin-bottom:12px"><div class="ш-к-т">последнее действие</div><div class="ш-к-п">'+т+'</div></div>':"");
+    clearTimeout(window.__ш_лог_т);
+    window.__ш_лог_т=setTimeout(function(){э.innerHTML=""},25000);
+  };
+  /* в «Ещё» — строки выгрузки */
+  function добавить(){
+    var стр=document.querySelector('[data-стр="ещё"]'); if(!стр||$("ш-выгрузка"))return;
+    var к=document.createElement("div"); к.className="ш-карт"; к.id="ш-выгрузка";
+    к.innerHTML='<div class="ш-к-т">Выгрузка и выбор</div>'+
+      '<div class="ш-ряд"><div class="ш-ряд-т"><div class="ш-ряд-н">Выбрать много файлов</div>'+
+      '<div class="ш-ряд-п">появится галочка у каждого файла</div></div><button id="ш-е-выбрать">включить</button></div>'+
+      '<div class="ш-ряд"><div class="ш-ряд-т"><div class="ш-ряд-н">Скачать папку</div>'+
+      '<div class="ш-ряд-п">всё, что в открытой папке</div></div><button id="ш-е-папку">скачать</button></div>'+
+      '<div class="ш-ряд"><div class="ш-ряд-т"><div class="ш-ряд-н">Скачать всё</div>'+
+      '<div class="ш-ряд-п">весь список одним архивом</div></div><button id="ш-е-всё">скачать</button></div>'+
+      '<div class="ш-ряд"><div class="ш-ряд-т"><div class="ш-ряд-н">Перенести всё в «Фото»</div>'+
+      '<div class="ш-ряд-п">все картинки и видео — в папку «Фото»</div></div><button id="ш-е-вфото">перенести</button></div>';
+    стр.insertBefore(к,стр.firstChild);
+    function наж(ид,цель,текст){var б=$(ид);if(!б)return;б.onclick=function(){
+      var т=$(цель); if(т){т.click(); window.ш_лог(текст)} else alert("нет такой кнопки в этой сборке")}}
+    наж("ш-е-выбрать","кнопка-выбор","режим выбора включён — отмечай файлы галочками");
+    наж("ш-е-папку","ск-папка","скачиваю папку");
+    наж("ш-е-всё","ск-всё","скачиваю всё");
+    наж("ш-е-вфото","кнопка-вфото","переношу картинки в «Фото»");
+  }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",function(){setTimeout(добавить,200)});
+  else setTimeout(добавить,200);
+})();
+</script>
+
 </body></html>
