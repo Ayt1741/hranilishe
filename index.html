@@ -98,6 +98,7 @@ footer button{flex:1 1 45%;min-width:140px}
     <button id="стат" style="flex:1;font-size:12px;padding:6px 8px">📊 статистика</button>
     <button id="корзина-кн" style="flex:1;font-size:12px;padding:6px 8px">🗑 корзина</button>
     <button id="служебное" style="flex:1.3;font-size:12px;padding:6px 8px">👁 мусор виден</button>
+    <button id="мозг-кн" style="flex:1;font-size:12px;padding:6px 8px;background:#2a2140;color:#c9b6ff">🧠 мозг</button>
   </div>
   <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
     <button id="сорт" style="flex:1;font-size:12px;padding:6px 8px">⇅ по дате</button>
@@ -2884,6 +2885,7 @@ function старт(){
       setTimeout(function(){var б=$("баннер");if(б)б.style.display="none"},15000);
     };
     $("кнопка-выбор").onclick=function(){включитьВыбор(!режимВыбора)};
+    if($("мозг-кн"))$("мозг-кн").onclick=открытьМозг;
     $("выб-снять").onclick=function(){выбранные={};применитьВыборККарточкам()};
     $("выб-всё").onclick=function(){
       for(var i=0;i<ВСЕ.length;i++){ if(подходит(ВСЕ[i]))поставитьВыбор(ВСЕ[i],true) }
@@ -3146,6 +3148,197 @@ function режимИзбранное(){
   фильтр = (фильтр==="избранное") ? "все" : "избранное";
   нарисовать();
   if(фильтр==="избранное")показатьБаннер("показано избранное: "+Object.keys(прочестьИзбранное()).length);
+}
+
+
+/* ================= МОЗГ: внешняя память для ИИ (v7.0) ================= */
+function прочестьЗнания(){
+  try{ var з=JSON.parse(localStorage.getItem("мозг-знания")||"[]"); return Array.isArray(з)?з:[] }catch(e){ return [] }
+}
+function сохранитьЗнания(з){ try{ localStorage.setItem("мозг-знания",JSON.stringify(з)) }catch(e){} }
+function прочестьПаспорт(){
+  var д="Проект: ХРАНИЛИЩЕ — бесплатное облако на Telegram.\nВладелец: один человек, всё делает сам, бесплатно, без серверов и без денег.\nПравила: ничего не удалять, только добавлять поверх; файлы до 2 ГБ; всё по-русски; сначала прямой ответ, потом действие.\nХранилище: канал Telegram + сайт GitHub Pages. Сайт — единственный интерфейс.\nКак отвечать: коротко, цифрами, без воды и без извинений.";
+  try{ return localStorage.getItem("мозг-паспорт")||д }catch(e){ return д }
+}
+function сохранитьПаспорт(т){ try{ localStorage.setItem("мозг-паспорт",т) }catch(e){} }
+function добавитьЗнание(){
+  var п=$("мозг-текст"); if(!п)return;
+  var т=String(п.value||"").trim(); if(!т){ показатьБаннер("пусто — напиши знание"); return }
+  var з=прочестьЗнания();
+  з.unshift({и:Date.now(), т:т.slice(0,4000), д:Math.floor(Date.now()/1000)});
+  сохранитьЗнания(з); п.value=""; открытьМозг();
+  показатьБаннер("знание сохранено: всего "+з.length);
+}
+function удалитьЗнание(и){
+  сохранитьЗнания(прочестьЗнания().filter(function(х){return String(х.и)!==String(и)}));
+  открытьМозг();
+}
+function мозгМаркдаун(){
+  var з=прочестьЗнания(), с=[];
+  с.push("# ХРАНИЛИЩЕ — мозг проекта (для ИИ)");
+  с.push("создано: "+new Date().toLocaleString("ru-RU")+" · файлов: "+ВСЕ.length+" · знаний: "+з.length);
+  с.push(""); с.push("## Паспорт проекта"); с.push(прочестьПаспорт());
+  с.push(""); с.push("## Знания (память)");
+  if(!з.length)с.push("- пока пусто");
+  з.forEach(function(х,i){ с.push((i+1)+". ["+new Date(х.д*1000).toLocaleDateString("ru-RU")+"] "+String(х.т).replace(/\n/g," ")) });
+  с.push(""); с.push("## Файлы в хранилище ("+ВСЕ.length+")");
+  var по=ВСЕ.filter(function(ф){return !вКорзине(ф)});
+  var объём=0; по.forEach(function(ф){объём+=(ф.р||0)});
+  с.push("объём: "+размер(объём));
+  по.slice(0,2000).forEach(function(ф){
+    с.push("- "+ф.и+" | "+размер(ф.р||0)+" | "+(ф.д?new Date(ф.д*1000).toLocaleDateString("ru-RU"):"")+((папкаФайла(ф))?" | папка: "+папкаФайла(ф):""));
+  });
+  if(по.length>2000)с.push("- … ещё "+(по.length-2000)+" файлов (список обрезан, чтобы влезло в чат ИИ)");
+  с.push(""); с.push("## Как этим пользоваться");
+  с.push("Скопируй этот файл целиком в любой ИИ (Grok, ChatGPT, Gemini, Arena) — он сразу будет знать весь архив и все знания проекта, без повторных объяснений.");
+  return с.join("\n");
+}
+function копироватьТекст(т){
+  function запас(){
+    var а=document.createElement("textarea"); а.value=т; а.style.position="fixed"; а.style.left="-9999px";
+    document.body.appendChild(а); а.select();
+    var ок=false; try{ ок=document.execCommand("copy") }catch(e){}
+    document.body.removeChild(а); return ок;
+  }
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    return navigator.clipboard.writeText(т).then(function(){return true}).catch(function(){return запас()});
+  }
+  return Promise.resolve(запас());
+}
+function скопироватьМозг(){
+  var т=мозгМаркдаун();
+  копироватьТекст(т).then(function(ок){
+    показатьБаннер(ок?("мозг скопирован: "+т.length+" символов — вставляй в любой ИИ"):"браузер запретил копирование — скачай файлом");
+  });
+}
+function скачатьМозг(){
+  var т=мозгМаркдаун();
+  сохранитьБлоб(new Blob([т],{type:"text/markdown;charset=utf-8"}),"МОЗГ-хранилища-"+new Date().toISOString().slice(0,10)+".md");
+  показатьБаннер("файл мозга сохранён, "+т.length+" символов");
+}
+function залитьМозг(){
+  if(!ТОКЕН){ показатьБаннер("сначала токен бота"); return }
+  var т=мозгМаркдаун();
+  показатьБаннер("заливаю мозг в Телеграм… "+т.length+" символов");
+  отправкаФайлаМозга(т).then(function(){
+    показатьБаннер("мозг залит в хранилище — теперь он есть на всех устройствах");
+  }).catch(function(e){ показатьБаннер("не смог залить: "+e.message) });
+}
+function отправкаФайлаМозга(т){
+  return new Promise(function(res,rej){
+    var xhr=new XMLHttpRequest();
+    xhr.open("POST","https://api.telegram.org/bot"+ТОКЕН+"/sendDocument",true);
+    xhr.timeout=120000;
+    xhr.onload=function(){
+      var j=null; try{ j=JSON.parse(xhr.responseText) }catch(e){}
+      if(xhr.status===200&&j&&j.ok)res(j); else rej(new Error((j&&j.description)||("код "+xhr.status)));
+    };
+    xhr.onerror=function(){rej(new Error("нет связи с Telegram"))};
+    xhr.ontimeout=function(){rej(new Error("истекло время"))};
+    var фд=new FormData();
+    фд.append("chat_id",чз());
+    фд.append("caption","мозг хранилища · знаний "+прочестьЗнания().length+" · файлов "+ВСЕ.length);
+    фд.append("document",new Blob([т],{type:"text/markdown"}),"МОЗГ-хранилища-"+new Date().toISOString().slice(0,10)+".md");
+    xhr.send(фд);
+  });
+}
+var МОЗГ_ДОКИ=null;
+function токены(т){ return String(т||"").toLowerCase().replace(/ё/g,"е").split(/[^a-zа-я0-9]+/i).filter(function(w){return w.length>1}) }
+function построитьМозгИндекс(){
+  var доки=[];
+  прочестьЗнания().forEach(function(з){ доки.push({вид:"знание", т:з.т, и:з.и, д:з.д}) });
+  ВСЕ.forEach(function(ф){
+    if(вКорзине(ф))return;
+    доки.push({вид:"файл", т:(ф.и||"")+" "+((папкаФайла(ф))||"")+" "+(ф.о||""), имя:ф.и, id:ф.и+"|"+(ф.р||0), р:ф.р, д:ф.д});
+  });
+  var частоты={}, длина=[];
+  доки.forEach(function(д){
+    д.слова=токены(д.т); д.тф={};
+    д.слова.forEach(function(w){ д.тф[w]=(д.тф[w]||0)+1 });
+    длина.push(д.слова.length);
+    Object.keys(д.тф).forEach(function(w){ частоты[w]=(частоты[w]||0)+1 });
+  });
+  var N=доки.length||1, средняя=длина.reduce(function(a,b){return a+b},0)/N||1;
+  доки.forEach(function(д){
+    д.idf={}; Object.keys(д.тф).forEach(function(w){ д.idf[w]=Math.log(1+(N-(частоты[w]||1)+0.5)/((частоты[w]||1)+0.5)) });
+    д.дл=д.слова.length||1; д.ср=средняя;
+  });
+  МОЗГ_ДОКИ=доки; return доки;
+}
+function поискПоМозгу(запрос){
+  var слова=токены(запрос); if(!слова.length)return [];
+  var доки=МОЗГ_ДОКИ||построитьМозгИндекс(), k1=1.4, b=0.75, итог=[];
+  доки.forEach(function(д){
+    var бал=0;
+    слова.forEach(function(w){
+      var ч=д.тф[w]||0; if(!ч)return;
+      бал += (д.idf[w]||1)*((ч*(k1+1))/(ч+k1*(1-b+b*(д.дл/д.ср))));
+    });
+    if(бал>0){ if(д.вид==="знание")бал*=3; итог.push({д:д, бал:бал}) }
+  });
+  итог.sort(function(a,b){return b.бал-a.бал});
+  return итог.slice(0,20);
+}
+function спроситьМозг(){
+  var п=$("мозг-вопрос"); if(!п)return;
+  var з=String(п.value||"").trim(); if(!з)return;
+  var р=поискПоМозгу(з), выход=$("мозг-ответ"); if(!выход)return;
+  if(!р.length){ выход.innerHTML='<div class="подсказка">ничего не нашлось по «'+з.replace(/[<>&]/g,"")+'»</div>'; return }
+  var html='<div class="подсказка">найдено '+р.length+', это можно скопировать и отдать ИИ:</div>';
+  р.forEach(function(х){
+    var д=х.д;
+    html+='<div class="подсказка" style="border-left:3px solid '+(д.вид==="знание"?"#c9b6ff":"#4a6fa5")+';padding-left:8px;margin:6px 0">'+
+      '<b>'+(д.вид==="знание"?"знание":"файл")+'</b> · '+х.бал.toFixed(2)+'<br>'+
+      String(д.т).slice(0,300).replace(/[<>&]/g,"")+'</div>';
+  });
+  выход.innerHTML=html;
+}
+function скопироватьНайденное(){
+  var п=$("мозг-вопрос"); if(!п)return;
+  var р=поискПоМозгу(п.value||"");
+  if(!р.length){ показатьБаннер("нечего копировать — сначала поиск"); return }
+  var т="По запросу «"+п.value+"» в моём хранилище найдено:\n"+р.map(function(х){return "- ["+х.д.вид+"] "+String(х.д.т).slice(0,200)}).join("\n");
+  копироватьТекст(т).then(function(ок){ показатьБаннер(ок?"найденное скопировано — вставляй в ИИ":"скопировать не дал браузер") });
+}
+function открытьМозг(){
+  var з=прочестьЗнания(), html='';
+  html+='<h3>🧠 Мозг хранилища</h3>';
+  html+='<div class="подсказка">Внешняя память для любого ИИ. Всё лежит бесплатно: знания — в телефоне и в Телеграме, файлы — в канале. Модель не помнит тебя между чатами — этот файл помнит.</div>';
+  html+='<div class="подсказка"><b>1. Паспорт проекта</b> (кто ты и как отвечать)</div>';
+  html+='<textarea id="мозг-паспорт" style="width:100%;height:110px;background:#121821;color:#dfe7f1;border:1px solid #2a3444;border-radius:8px;padding:8px;font-size:12px">'+прочестьПаспорт().replace(/[<>&]/g,"")+'</textarea>';
+  html+='<button class="p" data-мпасп="1">💾 сохранить паспорт</button>';
+  html+='<div class="подсказка" style="margin-top:10px"><b>2. Добавить знание</b> — важный факт, правило, вывод по проекту</div>';
+  html+='<textarea id="мозг-текст" placeholder="например: файлы больше 2 ГБ режем на части; ИИ-флот работает на Gemini free 1500 запросов в день" style="width:100%;height:70px;background:#121821;color:#dfe7f1;border:1px solid #2a3444;border-radius:8px;padding:8px;font-size:12px"></textarea>';
+  html+='<button class="p" data-мдоб="1">➕ запомнить</button>';
+  html+='<div class="подсказка" style="margin-top:10px"><b>3. Спросить мозг</b> (поиск по знаниям и именам файлов, работает без интернета)</div>';
+  html+='<input id="мозг-вопрос" placeholder="что ищем?" style="width:100%;background:#121821;color:#dfe7f1;border:1px solid #2a3444;border-radius:8px;padding:8px;font-size:13px">';
+  html+='<button class="p" data-мнайт="1">🔎 найти</button><button data-мкоп="1">📋 скопировать найденное</button>';
+  html+='<div id="мозг-ответ"></div>';
+  html+='<div class="подсказка" style="margin-top:12px"><b>4. Забрать мозг</b> — один файл, который делает любой ИИ умнее в этом проекте</div>';
+  html+='<button class="p" data-мскоп="1">📋 скопировать для ИИ</button>';
+  html+='<button data-мскач="1">⬇ скачать .md</button>';
+  html+='<button data-мтг="1">📤 залить в Телеграм</button>';
+  html+='<div class="подсказка" style="margin-top:10px">знаний: '+з.length+' · файлов в мозге: '+ВСЕ.filter(function(ф){return !вКорзине(ф)}).length+' · размер файла мозга ≈ '+Math.round(мозгМаркдаун().length/1024)+' КБ</div>';
+  html+='<div class="подсказка"><b>Мои знания</b></div>';
+  if(!з.length)html+='<div class="подсказка">пока пусто — добавь первое</div>';
+  з.slice(0,50).forEach(function(х){
+    html+='<div class="подсказка" style="border-left:3px solid #c9b6ff;padding-left:8px;margin:6px 0">'+
+      '<span style="opacity:.6">'+new Date(х.д*1000).toLocaleString("ru-RU")+'</span><br>'+
+      String(х.т).slice(0,400).replace(/[<>&]/g,"")+
+      '<br><button data-муд="'+х.и+'" style="font-size:11px;padding:2px 8px">удалить</button></div>';
+  });
+  html+='<button data-закрыть="1">закрыть</button>';
+  var тело=$("шторка-тело"); тело.innerHTML=html; $("шторка").style.display="block";
+  тело.querySelectorAll("[data-мпасп]").forEach(function(к){к.onclick=function(){ var в=$("мозг-паспорт"); сохранитьПаспорт(String(в.value||"")); показатьБаннер("паспорт сохранён") }});
+  тело.querySelectorAll("[data-мдоб]").forEach(function(к){к.onclick=добавитьЗнание});
+  тело.querySelectorAll("[data-мнайт]").forEach(function(к){к.onclick=спроситьМозг});
+  тело.querySelectorAll("[data-мкоп]").forEach(function(к){к.onclick=скопироватьНайденное});
+  тело.querySelectorAll("[data-мскоп]").forEach(function(к){к.onclick=скопироватьМозг});
+  тело.querySelectorAll("[data-мскач]").forEach(function(к){к.onclick=скачатьМозг});
+  тело.querySelectorAll("[data-мтг]").forEach(function(к){к.onclick=залитьМозг});
+  тело.querySelectorAll("[data-муд]").forEach(function(к){к.onclick=function(){удалитьЗнание(к.dataset.муд)}});
+  тело.querySelectorAll("[data-закрыть]").forEach(function(к){к.onclick=закрытьШторку});
+  var вп=$("мозг-вопрос"); if(вп)вп.onkeydown=function(е){ if(е.key==="Enter")спроситьМозг() };
 }
 
 function статистика(){
