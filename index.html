@@ -4865,7 +4865,7 @@ header,footer#подвал-главный{display:none!important}
 
 <div id="ш">
   <div id="ш-верх">
-    <div id="ш-лого"><span id="ш-знак">Х</span><span>ХРАНИЛИЩЕ</span><b id="ш-вер">v8.7</b></div>
+    <div id="ш-лого"><span id="ш-знак">Х</span><span>ХРАНИЛИЩЕ</span><b id="ш-вер">v8.8</b></div>
     <div id="ш-нав">
       <button class="ш-п on" data-п="файлы">📁 Файлы</button>
       <button class="ш-п" data-п="папки">🗂 Папки</button>
@@ -6696,6 +6696,155 @@ button:focus-visible{outline:2px solid #7fb2ff;outline-offset:2px}
   };
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",function(){setTimeout(function(){шапка();переписать();подменитьАвто()},1000)});
   else setTimeout(function(){шапка();переписать();подменитьАвто()},1000);
+})();
+</script>
+
+<style id="ш-стиль-88">
+.ш-мусор{display:flex;gap:10px;align-items:center;padding:10px 12px;background:#231a12;border:1px solid #5a4320;
+  border-radius:11px;margin-top:8px;flex-wrap:wrap}
+.ш-мусор-т{flex:1;min-width:170px;font-size:12.5px;color:#ffd9a8}
+.ш-куда-строк{font-size:12.5px;color:#cfe9df;margin-top:4px}
+.ш-куда-строк b{color:#8fe3bd}
+</style>
+
+<script>
+/* ===== v8.8: убрать мусорную папку «3», показать куда реально пишется, и не грузить exe из старой очереди ===== */
+(function(){
+  if(window.__Ш88)return; window.__Ш88=1;
+  function $(и){return document.getElementById(и)}
+  function ХР(){return window.__ХР||null}
+  function ст(){var х=ХР();return х?х.взять():{}}
+  function экр(т){return String(т==null?"":т).replace(/[<>&]/g,function(c){return{"<":"&lt;",">":"&gt;","&":"&amp;"}[c]})}
+  function тост(т,зл){ if(window.ш_тост)window.ш_тост(т,зл) }
+  function пф(ф){ try{return ХР().папкаФайла(ф)||""}catch(e){return ф.п||""} }
+  function число(имя){ return /^\d{1,3}$/.test(String(имя||"").trim()) }
+
+  /* ---------- 1. папка «3» и подобные числовые: слить в «Фото» ---------- */
+  function слитьМусорные(){
+    var х=ХР(); if(!х)return 0;
+    var о=х.взять(), папки=(о.ПАПКИ||[]).slice(), слито=0, имена=[];
+    папки.forEach(function(п){
+      if(!число(п))return;
+      try{ х.создатьПапку("Фото") }catch(e){}
+      /* файлы этой папки перевести в «Фото» файл за файлом */
+      (о.ВСЕ||[]).forEach(function(ф){
+        if(пф(ф)!==п)return;
+        try{
+          ф.п="Фото";
+          if(х.перенестиВсёВ){} /* не используем: сносит всё */
+        }catch(e){}
+      });
+      /* localStorage: раскладка и залито */
+      try{
+        var р=JSON.parse(localStorage.getItem("раскладка")||"{}");
+        var изменено=0;
+        Object.keys(р).forEach(function(к){ if(р[к]===п){р[к]="Фото";изменено++} });
+        localStorage.setItem("раскладка",JSON.stringify(р));
+        var з=JSON.parse(localStorage.getItem("залито")||"{}");
+        Object.keys(з).forEach(function(к){ if(з[к] && з[к].п===п){з[к].п="Фото";изменено++} });
+        localStorage.setItem("залито",JSON.stringify(з));
+        слито+=изменено;
+      }catch(e){}
+      /* убрать пустую папку из списка */
+      try{
+        var сп=JSON.parse(localStorage.getItem("папки")||"[]").filter(function(з){return з!==п});
+        if(сп.indexOf("Фото")<0)сп.push("Фото");
+        localStorage.setItem("папки",JSON.stringify(сп));
+      }catch(e){}
+      try{
+        var и=о.ПАПКИ.indexOf(п); if(и>=0)о.ПАПКИ.splice(и,1);
+        if(о.ПАПКИ.indexOf("Фото")<0)о.ПАПКИ.push("Фото");
+      }catch(e){}
+      имена.push(п);
+    });
+    if(имена.length){
+      /* активную папку тоже переводим на «Фото», иначе список пустой */
+      try{ х.поставить({активПапка:"Фото"}) }catch(e){}
+      try{ х.перерисоватьПапки&&х.перерисоватьПапки() }catch(e){}
+      try{ х.нарисовать() }catch(e){}
+      try{ window.обновитьКрошки&&window.обновитьКрошки() }catch(e){}
+      тост("папку «"+имена.join("», «")+"» слил с «Фото» — файлов перенесено: <b>"+слито+"</b>");
+    }
+    /* если активная папка числовая, а файлов там нет — открываем «Фото» */
+    try{
+      var а=х.взять().активПапка||"";
+      if(число(а))х.поставить({активПапка:"Фото"});
+    }catch(e){}
+    return слито;
+  }
+
+  /* ---------- 2. старая очередь: не грузить служебные exe и папку-число ---------- */
+  function починитьОчередь(){
+    try{
+      var з=indexedDB.open("хранилище-очередь",1);
+      з.onupgradeneeded=function(){var д=з.result;if(!д.objectStoreNames.contains("очередь"))д.createObjectStore("очередь",{keyPath:"ключ"})};
+      з.onsuccess=function(){
+        var д=з.result, т;
+        try{ т=д.transaction("очередь","readwrite") }catch(e){ try{д.close()}catch(e2){}; return }
+        var х=т.objectStore("очередь"), курс=х.openCursor(), убрано=0, починено=0;
+        курс.onsuccess=function(e){
+          var к=e.target.result; if(!к)return;
+          var зп=к.value||{}, имя=String(зп.имя||"");
+          /* ничего не удаляем: записи остаются, просто чиним папку */
+          if(число(зп.папка)){ зп.папка="Фото"; к.update(зп); починено++; }
+          к.continue();
+        };
+        т.oncomplete=function(){
+          try{д.close()}catch(e){}
+          if(починено)тост("в очереди исправил папку у "+починено+" файлов — теперь они идут в «Фото»");
+        };
+      };
+      з.onerror=function(){};
+    }catch(e){}
+  }
+
+  /* ---------- 3. наглядная строка «куда пишется» ---------- */
+  function куда(){
+    var карт=$("ш-авто-карт"); if(!карт)return;
+    if(!$("ш-88-куда")){
+      var д=document.createElement("div"); д.id="ш-88-куда"; д.className="ш-куда-строк";
+      var ит=$("ш-86-итог")||$("ш-авто-итог2");
+      if(ит&&ит.parentNode===карт)карт.insertBefore(д,ит); else карт.appendChild(д);
+    }
+    var э=$("ш-88-куда");
+    var рекорды; try{рекорды=JSON.parse(localStorage.getItem("залито")||"{}")}catch(e){рекорды={}}
+    var вФото=0; Object.keys(рекорды).forEach(function(к){ if((рекорды[к]||{}).п==="Фото")вФото++ });
+    var акт=(ст().активПапка)||"";
+    э.innerHTML="куда пишется: <b>папка «Фото»</b> · уже в «Фото»: <b>"+вФото+"</b>"+
+      (акт&&акт!=="Фото"?(" · открыта другая папка: «"+экр(акт)+"» — поэтому в списке не видно"):" · открыта папка «Фото»");
+    if(акт&&акт!=="Фото"&&!/Фото/.test(акт)){
+      if(!$("ш-88-кноп")){
+        var б=document.createElement("button"); б.id="ш-88-кноп"; б.className="p";
+        б.style.cssText="margin-left:8px;padding:5px 10px;font-size:12px";
+        б.textContent="открыть «Фото»";
+        б.onclick=function(){ try{ХР().поставить({активПапка:"Фото"});ХР().нарисовать();window.обновитьКрошки&&window.обновитьКрошки();тост("открыл «Фото»")}catch(e){} };
+        э.appendChild(б);
+      }
+    } else if($("ш-88-кноп")) $("ш-88-кноп").remove();
+  }
+
+  /* ---------- 4. на странице «Папки» — кнопка слияния для любой мусорной папки ---------- */
+  function метки(){
+    document.querySelectorAll(".ш-пап").forEach(function(к){
+      if(к.__ш88)return; к.__ш88=1;
+      var имя=(к.querySelector(".ш-пап-и")||{}).textContent||"";
+      имя=имя.replace(/^📁\s*/,"").trim();
+      if(!число(имя))return;
+      var б=document.createElement("span");
+      б.className="ш-мусор";
+      б.style.cssText="margin-top:8px;width:100%";
+      б.innerHTML='<div class="ш-мусор-т">похоже на мусорную папку (просто номер)</div>';
+      var кн=document.createElement("button"); кн.className="p"; кн.textContent="слить в «Фото»";
+      кн.onclick=function(){ слитьМусорные(); setTimeout(function(){ if(window.ш_показать)window.ш_показать("папки") },400) };
+      б.appendChild(кн); к.appendChild(б);
+    });
+  }
+
+  function старт(){ слитьМусорные(); починитьОчередь(); куда(); метки(); }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",function(){setTimeout(старт,1500)});
+  else setTimeout(старт,1500);
+  setInterval(function(){ куда(); метки(); },2500);
+  window.ш_88={слить:слитьМусорные, очередь:починитьОчередь};
 })();
 </script>
 
