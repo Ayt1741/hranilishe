@@ -4865,7 +4865,7 @@ header,footer#подвал-главный{display:none!important}
 
 <div id="ш">
   <div id="ш-верх">
-    <div id="ш-лого"><span id="ш-знак">Х</span><span>ХРАНИЛИЩЕ</span><b id="ш-вер">v8.4</b></div>
+    <div id="ш-лого"><span id="ш-знак">Х</span><span>ХРАНИЛИЩЕ</span><b id="ш-вер">v8.5</b></div>
     <div id="ш-нав">
       <button class="ш-п on" data-п="файлы">📁 Файлы</button>
       <button class="ш-п" data-п="папки">🗂 Папки</button>
@@ -6043,6 +6043,268 @@ button:focus-visible{outline:2px solid #7fb2ff;outline-offset:2px}
   else setTimeout(готово,400);
   /* страница создаётся оболочкой позже — проверим ещё раз */
   setInterval(function(){ if(!$("ш-авто-карт"))построить(); }, 2500);
+})();
+</script>
+
+<style id="ш-стиль-85">
+.ш-пути{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:820px){ .ш-пути{grid-template-columns:1fr} }
+.ш-путь{background:#131a24;border:1px solid #24303f;border-radius:13px;padding:14px}
+.ш-путь.главный{border-color:#2f6b4f;background:#101c17}
+.ш-путь-н{font-size:15px;font-weight:700;margin-bottom:4px}
+.ш-путь-п{font-size:12.5px;color:#8b97a8;line-height:1.5}
+.ш-путь-б{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.ш-дроп{border:2px dashed #2b3a4f;border-radius:11px;padding:18px 12px;text-align:center;margin-top:10px;
+  background:#0f1620;cursor:pointer;transition:border-color .15s,background .15s}
+.ш-дроп:hover{border-color:#4f8cff}
+.ш-дроп.над{border-color:#33c48d;background:#12241c}
+.ш-дроп-и{font-size:22px}
+.ш-дроп-т{font-size:13px;font-weight:600;margin-top:4px}
+.ш-дроп-п{font-size:11.5px;color:#8b97a8;margin-top:2px}
+.ш-копия{font-family:ui-monospace,Menlo,monospace;background:#0b0e13;border:1px solid #2b3a4f;border-radius:8px;
+  padding:6px 9px;font-size:13px;color:#9fc6ff;display:inline-block;margin-top:6px}
+.ш-мини-кан{font-size:12px;color:#8b97a8;margin-top:10px}
+</style>
+
+<script>
+/* ======= v8.5: два реальных пути, без «впиши ссылку» ======= */
+(function(){
+  if(window.__Ш85)return; window.__Ш85=1;
+  function $(и){return document.getElementById(и)}
+  function экр(т){return String(т==null?"":т).replace(/[<>&]/g,function(c){return{"<":"&lt;",">":"&gt;","&":"&amp;"}[c]})}
+  function Т(){try{return localStorage.getItem("токен-бота")||""}catch(e){return ""}}
+  function тост(т,зл){ if(window.ш_тост)window.ш_тост(т,зл) }
+  function api(метод,тело){
+    var т=Т(); if(!т)return Promise.reject(new Error("нет ключа бота"));
+    return fetch("https://api.telegram.org/bot"+т+"/"+метод,{method:"POST",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify(тело||{})}).then(function(r){return r.json()});
+  }
+  function лог(т){var э=$("ш-авто-лог"); if(э)э.textContent=т}
+
+  /* --- 1. понятный вердикт вместо «бот нигде не админ» --- */
+  function вердикт(){
+    var э=$("ш-авто-итог2"); if(!э)return;
+    var каналов=document.querySelectorAll("#ш-авто-каналы .ш-кан").length;
+    var админов=document.querySelectorAll("#ш-авто-каналы .ш-админ").length;
+    var наш=document.querySelectorAll("#ш-авто-каналы .ш-кан-п").length;
+    var естьСтарый=/это наш канал-хранилище/.test(э.textContent||"")&&каналов<=1;
+    if(каналов===0){
+      э.innerHTML="<b style='color:#ffcf87'>Старых каналов в этом браузере нет.</b><br>"+
+        "Сайт знает только канал-хранилище. Ниже два пути — оба рабочие, выбери любой.";
+      показатьПути(true);
+    } else if(естьСтарый||админов===0){
+      э.innerHTML="<b style='color:#ffcf87'>Старый канал не найден в браузере</b> — из него переносить нечего автоматически. "+
+        "Ниже два пути: включить перенос из старого канала (2 действия в Telegram) или просто залить фото заново.";
+      показатьПути(true);
+    }
+  }
+
+  /* --- 2. карточка с двумя путями --- */
+  function показатьПути(показать){
+    var к=$("ш-пути-карт");
+    if(!к){
+      var стр=document.querySelector('[data-стр="старые"]'); if(!стр)return;
+      к=document.createElement("div"); к.className="ш-карт"; к.id="ш-пути-карт";
+      к.innerHTML=
+        '<div class="ш-к-т" style="font-size:15px">Два пути вернуть старые фото</div>'+
+        '<div class="ш-пути">'+
+          '<div class="ш-путь главный">'+
+            '<div class="ш-путь-н">① Залить фото заново с ноутбука</div>'+
+            '<div class="ш-путь-п">Работает сразу, никаких прав в Telegram не нужно. Файлы уходят в папку '+
+            '«<b id="ш-путь-папка">Фото</b>», большие режутся сами. Этим же путём ты уже заливал 900 фото.</div>'+
+            '<div class="ш-дроп" id="ш-дроп">'+
+              '<div class="ш-дроп-и">⬆</div>'+
+              '<div class="ш-дроп-т">Перетащи сюда папку или фото</div>'+
+              '<div class="ш-дроп-п">или нажми, чтобы выбрать на диске (можно выделить всё сразу)</div>'+
+            '</div>'+
+            '<div class="ш-путь-б"><button class="p" id="ш-путь-выбрать">Выбрать файлы</button>'+
+              '<button id="ш-путь-папку">Выбрать целую папку</button></div>'+
+            '<div class="ш-мини-кан" id="ш-путь-итог">ещё ничего не выбрано</div>'+
+          '</div>'+
+          '<div class="ш-путь">'+
+            '<div class="ш-путь-н">② Перенести из старого канала</div>'+
+            '<div class="ш-путь-п">Файлы останутся там же, а в этом сайте появятся их копии. Нужно 2 действия в Telegram — '+
+            'бот должен получить доступ к старому каналу, иначе Telegram не отдаёт из него файлы.</div>'+
+            '<div class="ш-путь-п" style="margin-top:8px"><b>1.</b> Добавь бота админом старого канала: канал → «Администраторы» → '+
+            '«Добавить» → вписать имя бота → Сохранить.</div>'+
+            '<div style="margin-top:4px"><span class="ш-копия" id="ш-бот-имя">@…</span> '+
+            '<button id="ш-копия-кн" style="padding:5px 9px;font-size:12px">скопировать</button></div>'+
+            '<div class="ш-путь-п" style="margin-top:10px"><b>2.</b> В том же канале перешли любое сообщение с файлом этому боту в личку.</div>'+
+            '<div class="ш-путь-б"><button class="p" id="ш-путь-найти">я сделал — найти и перенести</button></div>'+
+            '<div class="ш-мини-кан" id="ш-путь-поиск">ждёт</div>'+
+          '</div>'+
+        '</div>';
+      var авто=$("ш-авто-карт");
+      if(авто&&авто.nextSibling)стр.insertBefore(к,авто.nextSibling); else стр.insertBefore(к,стр.firstChild);
+      привязать();
+    }
+    if(показать===false)к.style.display="none";
+  }
+
+  function привязать(){
+    /* имя бота */
+    if(Т()){
+      api("getMe").then(function(я){
+        var э=$("ш-бот-имя");
+        if(э)э.textContent="@"+((я.result&&я.result.username)||"?");
+      }).catch(function(){});
+    }else{
+      var э=$("ш-бот-имя"); if(э)э.textContent="ключ бота не вставлен";
+    }
+    if($("ш-копия-кн"))$("ш-копия-кн").onclick=function(){
+      var т=($("ш-бот-имя")||{}).textContent||"";
+      try{navigator.clipboard.writeText(т);тост("скопировано: <b>"+экр(т)+"</b>")}catch(e){тост("не смог скопировать",true)}
+    };
+
+    /* путь 1 — заливка */
+    function вПапкуФото(){
+      try{
+        var х=window.__ХР; if(!х)return;
+        if(typeof х.создатьПапку==="function")х.создатьПапку("Фото");
+        х.поставить({активПапка:"Фото"});
+        if(х.перерисоватьПапки)х.перерисоватьПапки();
+      }catch(e){}
+    }
+    function залить(файлы){
+      if(!файлы||!файлы.length){тост("файлы не выбраны",true);return}
+      var сумма=0; for(var i=0;i<файлы.length;i++)сумма+=(файлы[i].size||0);
+      var ит=$("ш-путь-итог");
+      if(ит)ит.textContent="выбрано файлов: "+файлы.length+" · "+(сумма/1048576).toFixed(1)+" МБ · отправляю…";
+      вПапкуФото();
+      try{
+        var х=window.__ХР;
+        (х.запустить||х.партия)(файлы);
+        тост("заливаю <b>"+файлы.length+"</b> файлов в «Фото»");
+      }catch(e){ тост("не смог запустить: "+e.message,true) }
+    }
+    if($("ш-путь-выбрать"))$("ш-путь-выбрать").onclick=function(){
+      var в=$("выбор"); if(в){в.value="";в.click()}
+    };
+    if($("ш-путь-папку"))$("ш-путь-папку").onclick=function(){
+      var в=$("выбор-папки");
+      if(!в){
+        в=document.createElement("input");
+        в.type="file"; в.id="выбор-папки"; в.multiple=true;
+        в.setAttribute("webkitdirectory",""); в.setAttribute("directory","");
+        в.style.display="none"; document.body.appendChild(в);
+        в.onchange=function(e){ залить(Array.prototype.slice.call(e.target.files||[])) };
+      }
+      в.value=""; в.click();
+    };
+    var в=$("выбор");
+    if(в&&!в.__ш85){
+      в.__ш85=1;
+      var прежний=в.onchange;
+      в.onchange=function(e){
+        залить(Array.prototype.slice.call(e.target.files||[]));
+      };
+    }
+    var д=$("ш-дроп");
+    if(д&&!д.__ш85){
+      д.__ш85=1;
+      д.onclick=function(){var вв=$("выбор");if(вв){вв.value="";вв.click()}};
+      ["dragenter","dragover"].forEach(function(т){д.addEventListener(т,function(e){e.preventDefault();д.classList.add("над")})});
+      ["dragleave","drop"].forEach(function(т){д.addEventListener(т,function(e){e.preventDefault();д.classList.remove("над")})});
+      д.addEventListener("drop",function(e){
+        var ф=e.dataTransfer&&e.dataTransfer.files;
+        if(ф&&ф.length)залить(Array.prototype.slice.call(ф));
+      });
+    }
+
+    /* путь 2 — поиск канала по пересылке, затем автоскан */
+    if($("ш-путь-найти"))$("ш-путь-найти").onclick=function(){
+      var п=$("ш-путь-поиск"); if(п)п.textContent="смотрю, что бот получил от тебя…";
+      api("getUpdates",{limit:30,timeout:0}).then(function(j){
+        if(!j.ok){ if(п)п.textContent="Telegram не дал список: "+j.description; return }
+        var найдено=null;
+        (j.result||[]).forEach(function(об){
+          var м=об.message||об.channel_post||об.edited_message; if(!м)return;
+          var от=(м.forward_origin&&м.forward_origin.chat)||м.forward_from_chat;
+          if(от&&от.id)найдено={ид:от.id,назв:от.title||от.username||String(от.id)};
+        });
+        if(!найдено){
+          if(п)п.innerHTML="пересылки не видно. Проверь: сообщение переслано <b>именно этому боту в личку</b>, "+
+            "а не в «Избранное». Потом нажми кнопку снова.";
+          тост("пересылки нет — перешли сообщение боту в личку",true); return;
+        }
+        if(п)п.textContent="нашёл канал «"+найдено.назв+"», проверяю права бота…";
+        api("getChatMember",{chat_id:найдено.ид,user_id:(window.__Ш85_МОЙ||0)}).then(function(){});
+        api("getMe").then(function(я){
+          var мой=(я.result&&я.result.id)||0;
+          return api("getChatMember",{chat_id:найдено.ид,user_id:мой}).then(function(у){
+            var ст=у.ok?(у.result.status||"?"):"?";
+            if(ст!=="administrator"&&ст!=="creator"){
+              if(п)п.innerHTML="канал «"+экр(найдено.назв)+"» найден, но бот там <b>"+экр(ст)+"</b>. "+
+                "Добавь бота админом (или проверь, что добавлен именно он) и нажми кнопку снова.";
+              тост("бот не админ в этом канале",true); return;
+            }
+            if(п)п.textContent="бот админ в «"+найдено.назв+"» — начинаю перенос…";
+            тост("канал найден: <b>"+экр(найдено.назв)+"</b>, тащу файлы");
+            try{ localStorage.setItem("последний-канал-поиска",найдено.ид) }catch(e){}
+            перенос(найдено.ид, найдено.назв, п);
+          });
+        });
+      }).catch(function(e){ if(п)п.textContent="ошибка сети: "+e.message });
+    };
+  }
+
+  /* --- 3. сам перенос по номерам сообщений --- */
+  function перенос(ид, назв, куда){
+    var КХ="";try{КХ=localStorage.getItem("канал-хранилище")||""}catch(e){}
+    if(!КХ){тост("нет канала-хранилища",true);return}
+    var до=300, i=1, найдено=0, пусто=0, стоп=false;
+    window.__Ш85_СТОП=function(){стоп=true};
+    function шаг(){
+      if(стоп){ if(куда)куда.textContent="остановлено на сообщении "+i+" · найдено файлов: "+найдено; return }
+      if(i>до){
+        if(куда)куда.innerHTML="готово: из «"+экр(назв)+"» перенесено <b>"+найдено+"</b> файлов "+
+          "(проверил "+до+" сообщений). Файлы уже во вкладке «Файлы». Чтобы забрать больше — нажми кнопку снова, "+
+          "продолжу с "+(до+1)+".";
+        try{localStorage.setItem("ш-скан-дальше",String(до+1))}catch(e){}
+        тост("перенесено <b>"+найдено+"</b> файлов");
+        try{window.__ХР&&window.__ХР.нарисовать()}catch(e){}
+        return;
+      }
+      if(куда)куда.textContent="сообщение "+i+" из "+до+" · найдено файлов: "+найдено;
+      var п=$("ш-авто-полоса"); if(п)п.style.width=Math.round(i/до*100)+"%";
+      api("forwardMessage",{chat_id:КХ,from_chat_id:ид,message_id:i}).then(function(j){
+        if(j.ok){
+          var р=j.result||{}, д=р.document||р.video||р.audio||р.animation||(р.photo&&р.photo[р.photo.length-1]);
+          if(д){
+            var имя=д.file_name||("фото от "+new Date((р.date||0)*1000).toLocaleDateString("ru-RU"));
+            var рб=д.file_size||0;
+            try{
+              var А=window.ХРАНИЛИЩЕ||{};
+              if(А.запомнить)А.запомнить(имя+"|"+рб+"|"+(р.date||0),
+                {и:имя,р:рб,f:д.file_id||"",ч:1,д:р.date||0,о:"склад",т:д.mime_type||"",
+                 п:"Фото",мсг:р.message_id||0,чат:КХ});
+            }catch(e){}
+            найдено++;
+          } else пусто++;
+        } else {
+          пусто++;
+          if(/not enough rights|have no rights|chat not found/i.test(j.description||"")){
+            if(куда)куда.textContent="Telegram не пускает: "+j.description+" — бот должен быть админом канала.";
+            тост("нет прав в канале",true); return;
+          }
+        }
+        i++; setTimeout(шаг,1180);
+      }).catch(function(){i++;setTimeout(шаг,1300)});
+    }
+    шаг();
+  }
+
+  /* --- 4. запуск --- */
+  function старт(){
+    var стр=document.querySelector('[data-стр="старые"]'); if(!стр)return;
+    if(!$("ш-пути-карт"))показатьПути(true);
+    /* вердикт обновляем после работы авто-кнопки */
+    var набл=new MutationObserver(function(){ setTimeout(вердикт,300) });
+    var ит=$("ш-авто-итог2"); if(ит&&!ит.__н85){ ит.__н85=1; набл.observe(ит,{childList:true,subtree:true,characterData:true}) }
+  }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",function(){setTimeout(старт,700)});
+  else setTimeout(старт,700);
+  setInterval(старт,3000);
 })();
 </script>
 
