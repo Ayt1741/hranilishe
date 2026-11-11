@@ -56,6 +56,7 @@ pre{margin:6px 0 0;white-space:pre-wrap;word-break:break-word;color:#b8c6d8;font
   </div>
 </div>
 <script>
+var ВСТРОЕНО = window.__ДАННЫЕ__ || null;
 function esc(t){return String(t==null?"":t).replace(/[<>&]/g,function(c){return {"<":"&lt;",">":"&gt;","&":"&amp;"}[c]})}
 function зн(v){return v?'<span style="color:#5ee6a0">✓</span>':'<span style="color:#ff7d7d">✗</span>'}
 function рисовать(д){
@@ -94,10 +95,15 @@ function рисовать(д){
 function тян(){
   fetch("actions.json?t="+Date.now(),{cache:"no-store"}).then(function(r){
     if(!r.ok)throw new Error("нет файла actions.json");
-    return r.json()}).then(рисовать).catch(function(e){
-      document.getElementById("т").style.background="#ff7d7d";
-      document.getElementById("жт").textContent="нет связи с actions.json";
-      document.getElementById("обн").textContent=String(e.message||e);
+    return r.json()}).then(function(д){рисовать(д);document.getElementById("жт").textContent="данные из интернета"}).catch(function(e){
+      if(ВСТРОЕНО && ВСТРОЕНО.действия){рисовать(ВСТРОЕНО);
+        document.getElementById("жт").textContent="офлайн: данные из файла";
+        document.getElementById("т").style.background="#ffcf6b";
+        document.getElementById("обн").textContent="снимок от "+(ВСТРОЕНО.проверка||{}).опубликовано||"";
+      } else {
+        document.getElementById("т").style.background="#ff7d7d";
+        document.getElementById("жт").textContent="нет данных";
+      }
     });
 }
 document.getElementById("обнкн").onclick=тян;
