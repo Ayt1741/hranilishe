@@ -108,4 +108,5 @@ function тян(){
 }
 document.getElementById("обнкн").onclick=тян;
 тян(); setInterval(тян,5000);
+document.addEventListener("visibilitychange",function(){if(!document.hidden)тян()});
 </script></body></html>
