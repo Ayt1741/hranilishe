@@ -56,7 +56,6 @@ pre{margin:6px 0 0;white-space:pre-wrap;word-break:break-word;color:#b8c6d8;font
     <div><b id="цц">—</b><span>хеш-цепочка</span></div>
   </div>
 
-  <div id="правила"></div>
 
   <div class="лб" style="margin:14px 0 6px">Лента действий · по 20 на страницу</div>
   <div id="стр">
@@ -69,6 +68,9 @@ pre{margin:6px 0 0;white-space:pre-wrap;word-break:break-word;color:#b8c6d8;font
 
   <div class="лб" style="margin:18px 0 6px">Файлы, изменённые за последний час</div>
   <div class="ф" id="файлы"></div>
+
+  <div class="лб" style="margin:18px 0 6px">Законы, которые я соблюдаю в этом ходе</div>
+  <div id="правила"></div>
 
   <div style="margin:18px 0 30px;color:#5d6a7a;font-size:11.5px">
     Данные берутся из <b>actions.json</b> без кэша. Кнопка «обновить» перечитывает сразу, страница — каждые 5 секунд.
@@ -89,7 +91,7 @@ function цветС(с){return с==="✓"?"#5ee6a0":(с==="✗"?"#ff7d7d":"#8b97
 function рисоватьПравила(д){
   var п=д.проверка||{}, з=д.законы||[], с="";
   if(з.length){
-    с+='<div class="лб" style="margin-bottom:6px">Законы, которые я соблюдаю в этом ходе</div>';
+    
     for(var i=0;i<з.length;i++){
       с+='<div class="закон"><span class="с" style="color:'+цветС(з[i].статус)+'">'+esc(з[i].статус)+'</span><span>'+esc(з[i].текст)+(з[i].пояснение?' <span style="color:#6b7889">— '+esc(з[i].пояснение)+'</span>':'')+'</span></div>';
     }
