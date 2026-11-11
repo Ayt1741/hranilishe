@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Панель действий агента</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#0b0e13;color:#dfe7f2;font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace}
+.об{max-width:980px;margin:0 auto;padding:14px}
+.bad{display:inline-flex;align-items:center;gap:6px;background:#16202c;border:1px solid #24303f;border-radius:20px;padding:3px 10px;font-size:12px}
+.т{width:9px;height:9px;border-radius:50%;background:#8b97a8}
+.зап{background:#101c2b;border:1px solid #2b4a7a;border-radius:12px;padding:11px 13px;margin:12px 0}
+.лб{font-size:11px;color:#8b97a8;text-transform:uppercase;letter-spacing:.5px}
+.ц{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:12px}
+.ц>div{flex:1 1 150px;background:#0f1520;border:1px solid #222c3a;border-radius:11px;padding:9px 11px}
+.ц b{display:block;font-size:20px;color:#9fc6ff}
+.ц span{font-size:11px;color:#8b97a8}
+#правила{background:#0f1520;border:1px solid #222c3a;border-radius:11px;padding:10px 13px;margin-bottom:12px;font-size:12.5px}
+details{background:#0f1520;border:1px solid #222c3a;border-left:3px solid #5ee6a0;border-radius:9px;padding:8px 11px;margin-bottom:6px}
+details summary{cursor:pointer;list-style:none}
+pre{margin:6px 0 0;white-space:pre-wrap;word-break:break-word;color:#b8c6d8;font-size:11.5px}
+.кн{background:#1c3b63;border:1px solid #2f5c95;color:#e8f0fb;border-radius:9px;padding:7px 13px;font:inherit;cursor:pointer}
+.кн:active{transform:scale(.97)}
+.ф{font-size:12px;color:#a9b8cb}
+</style></head>
+<body><div class="об">
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <b style="font-size:17px;color:#cfe3ff">Панель действий агента</b>
+    <span class="bad"><span class="т" id="т"></span><span id="жт">загружаю…</span></span>
+    <span id="обн" style="color:#6b7889;font-size:11.5px"></span>
+    <button class="кн" id="обнкн" style="margin-left:auto">обновить</button>
+  </div>
+
+  <div class="зап">
+    <div class="лб">Запрос пользователя, над которым идёт работа</div>
+    <div id="запрос" style="margin-top:5px">—</div>
+  </div>
+
+  <div class="ц">
+    <div><b id="цз">0</b><span>действий записано</span></div>
+    <div><b id="цх">0</b><span>действий в этом ходе</span></div>
+    <div><b id="цп">—</b><span>записей переписки прочитано</span></div>
+    <div><b id="цц">—</b><span>хеш-цепочка</span></div>
+  </div>
+
+  <div id="правила"></div>
+
+  <div class="лб" style="margin:14px 0 6px">Лента действий — каждое, по порядку</div>
+  <div id="лента"></div>
+
+  <div class="лб" style="margin:18px 0 6px">Файлы, изменённые за последний час</div>
+  <div class="ф" id="файлы"></div>
+
+  <div style="margin:18px 0 30px;color:#5d6a7a;font-size:11.5px">
+    Страница читает <b>actions.json</b> — файл, который агент обновляет после каждого действия.
+    Лента ссылается хешами, поэтому пропуск действия виден как «порвана». Кнопка «обновить» перечитывает файл.
+  </div>
+</div>
+<script>
+function esc(t){return String(t==null?"":t).replace(/[<>&]/g,function(c){return {"<":"&lt;",">":"&gt;","&":"&amp;"}[c]})}
+function зн(v){return v?'<span style="color:#5ee6a0">✓</span>':'<span style="color:#ff7d7d">✗</span>'}
+function рисовать(д){
+  var п=д.проверка||{};
+  document.getElementById("запрос").textContent=п.запрос||"—";
+  document.getElementById("цз").textContent=п["записей"]||0;
+  document.getElementById("цх").textContent=п["действий_в_ходе"]||0;
+  var пер=п.переписка||{};
+  document.getElementById("цп").textContent=пер["записей"]?(пер["записей"]+" / "+пер["символов"]):"—";
+  var ц=document.getElementById("цц");
+  ц.textContent=п["цепочка_целая"]?"целая":"порвана";
+  ц.style.color=п["цепочка_целая"]?"#5ee6a0":"#ff7d7d";
+  document.getElementById("т").style.background="#5ee6a0";
+  document.getElementById("жт").textContent="данные получены";
+  document.getElementById("обн").textContent=(п.опубликовано?("опубликовано "+п.опубликовано.replace("T"," ")):"");
+  document.getElementById("правила").innerHTML=
+    зн(п["правило_переписка_первой"])+' первым действием хода прочитана вся переписка'+
+    (пер.sha256?' <span style="color:#6b7889">· sha256 '+esc(String(пер.sha256).slice(0,16))+'…</span>':'')+'<br>'+
+    зн(п["правило_ход_дописан"])+' ход (запрос и ответ) дописан в журнал переписки<br>'+
+    зн(п["цепочка_целая"])+' ни одно действие не выпало из цепочки'+
+    ((п.разрывы&&п.разрывы.length)?' <span style="color:#ff7d7d">· разрывы на №'+esc(п.разрывы.join(", "))+'</span>':'');
+  var л=(д.действия||[]).slice().reverse(), с="";
+  for(var i=0;i<л.length;i++){var з=л[i];
+    var цв=з.код===0?"#5ee6a0":"#ff7d7d";
+    с+='<details style="border-left-color:'+цв+'"><summary>'+
+       '<span style="color:#6b7889">№'+з.н+' · '+(з.ход?("ход "+з.ход):"без хода")+' · '+esc(String(з.в||"").split("T")[1]||"")+'</span> '+
+       '<b>'+esc(з.что)+'</b>'+
+       '<span style="color:#6b7889"> · код '+з.код+' · '+з.сек+' с · '+з["символов"]+' симв. · sha '+esc(String(з.хеш||"").slice(0,8))+'</span></summary>'+
+       '<div style="margin-top:6px;color:#8b97a8;font-size:11.5px;word-break:break-all">команда: '+esc(з.команда||"—")+'</div>'+
+       '<pre>'+esc(String(з.вывод||"").slice(0,1200))+'</pre></details>';}
+  document.getElementById("лента").innerHTML=с||'<div style="color:#6b7889">пока пусто</div>';
+  var ф=д.файлы||[], фс="";
+  for(var j=0;j<ф.length;j++)фс+='<div>'+esc(ф[j].когда)+' · '+esc(ф[j].путь)+' · '+ф[j].б+' б</div>';
+  document.getElementById("файлы").innerHTML=фс||'<div style="color:#6b7889">нет изменений</div>';
+}
+function тян(){
+  fetch("actions.json?t="+Date.now(),{cache:"no-store"}).then(function(r){
+    if(!r.ok)throw new Error("нет файла actions.json");
+    return r.json()}).then(рисовать).catch(function(e){
+      document.getElementById("т").style.background="#ff7d7d";
+      document.getElementById("жт").textContent="нет связи с actions.json";
+      document.getElementById("обн").textContent=String(e.message||e);
+    });
+}
+document.getElementById("обнкн").onclick=тян;
+тян(); setInterval(тян,5000);
+</script></body></html>
