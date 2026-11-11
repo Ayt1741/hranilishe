@@ -4865,7 +4865,7 @@ header,footer#подвал-главный{display:none!important}
 
 <div id="ш">
   <div id="ш-верх">
-    <div id="ш-лого"><span id="ш-знак">Х</span><span>ХРАНИЛИЩЕ</span><b id="ш-вер">v8.3</b></div>
+    <div id="ш-лого"><span id="ш-знак">Х</span><span>ХРАНИЛИЩЕ</span><b id="ш-вер">v8.3.1</b></div>
     <div id="ш-нав">
       <button class="ш-п on" data-п="файлы">📁 Файлы</button>
       <button class="ш-п" data-п="папки">🗂 Папки</button>
@@ -5556,12 +5556,102 @@ button:focus-visible{outline:2px solid #7fb2ff;outline-offset:2px}
     шаг();
   }
 
+  /* ---------- 3.5 КАКОЙ ЭТО КАНАЛ: приведение ссылки к id и проверка прав бота ---------- */
+  function нормализовать(в){
+    в=String(в||"").trim();
+    if(!в)return "";
+    var м=в.match(/t\.me\/c\/(\d+)/i);            // https://t.me/c/1234567890/45 -> -1001234567890
+    if(м)return "-100"+м[1];
+    м=в.match(/t\.me\/([A-Za-z0-9_]{4,})/i);        // https://t.me/moy_kanal -> @moy_kanal
+    if(м && м[1]!=="c")return "@"+м[1];
+    if(/^-?\d+$/.test(в)){
+      if(в.indexOf("-100")===0)return в;
+      if(в.indexOf("-")===0)return в;
+      return "-100"+в;                                // вставили «голый» номер канала
+    }
+    if(в.indexOf("@")===0)return в;
+    return "@"+в;
+  }
+  window.ш_норм=нормализовать;
+
+  function писатьВ(ид,т){var э=$(ид);if(э)э.textContent=т}
+
+  function проверитьДоступ(){
+    var Т=токен();
+    if(!Т){тост("сначала вставь ключ бота (🔑 ключ)",true);return}
+    var вх=$("ш-сф-откуда"), ид=нормализовать(вх&&вх.value);
+    if(!ид){тост("впиши канал: ссылку t.me или id -100…",true);return}
+    if(вх)вх.value=ид;
+    писатьВ("ш-сф-проверка","проверяю "+ид+" …");
+    function api(метод,тело){
+      return fetch("https://api.telegram.org/bot"+Т+"/"+метод,{method:"POST",
+        headers:{"Content-Type":"application/json"},body:JSON.stringify(тело||{})}).then(function(r){return r.json()});
+    }
+    api("getMe").then(function(я){
+      var бот=я.ok?(я.result.username||я.result.first_name):"?";
+      return api("getChat",{chat_id:ид}).then(function(ч){
+        if(!ч.ok){
+          писатьВ("ш-сф-проверка","канал "+ид+" не найден: "+ч.description+
+            "\n\nЧто это значит: либо id неверный, либо бот в этом канале не состоит.\n"+
+            "Добавь бота @"+бот+" администратором канала (инструкция ниже) и нажми проверку снова.");
+          тост("канал не найден или бот не в нём",true);
+          return;
+        }
+        var назв=(ч.result.title||"(без названия)")+" · тип: "+ч.result.type;
+        return api("getChatMember",{chat_id:ид,user_id:(я.result&&я.result.id)||0}).then(function(уч){
+          var ст=уч.ok?(уч.result.status||"?"):"нет данных ("+(уч.description||"")+")";
+          var хорошо=(ст==="administrator"||ст==="creator");
+          писатьВ("ш-сф-проверка",
+            "канал: "+назв+"\nбот: @"+бот+"\nстатус бота в канале: "+ст+"\n\n"+
+            (хорошо
+              ? "Всё готово — можно жать «просканировать канал». Начинай с 1 по 500, потом продолжай с 501."
+              : "Бот НЕ администратор. Зайди в канал → «Администраторы» → «Добавить» → @" + бот +
+                " → включи «Публикация сообщений» → Сохранить. Потом нажми проверку ещё раз."));
+          тост(хорошо?"доступ есть, статус: "+ст:"бот не админ — статус: "+ст,!хорошо);
+        });
+      });
+    }).catch(function(e){ писатьВ("ш-сф-проверка","ошибка сети: "+e.message) });
+  }
+
+  function узнатьПоПересылке(){
+    var Т=токен();
+    if(!Т){тост("сначала вставь ключ бота (🔑 ключ)",true);return}
+    писатьВ("ш-сф-проверка","смотрю последнее сообщение боту…");
+    fetch("https://api.telegram.org/bot"+Т+"/getUpdates",{method:"POST",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify({limit:20,timeout:0})})
+      .then(function(r){return r.json()})
+      .then(function(j){
+        if(!j.ok){писатьВ("ш-сф-проверка","Telegram не дал список: "+j.description);return}
+        var найдено=null;
+        (j.result||[]).forEach(function(об){
+          var м=об.message||об.channel_post||об.edited_message;
+          if(!м)return;
+          var от=(м.forward_origin&&м.forward_origin.chat)||м.forward_from_chat;
+          if(от&&от.id)найдено={id:от.id,назв:от.title||от.username||String(от.id)};
+        });
+        if(!найдено){
+          писатьВ("ш-сф-проверка",
+            "в последних сообщениях боту пересылки из канала нет.\n\n"+
+            "Сделай так: открой в Telegram старый канал → любое сообщение с файлом → «Переслать» → выбери нашего бота → отправь.\n"+
+            "Потом нажми эту кнопку снова — я подставлю id канала сам.");
+          тост("перешли одно сообщение из старого канала боту",true);
+          return;
+        }
+        var вх=$("ш-сф-откуда"); if(вх)вх.value=найдено.id;
+        писатьВ("ш-сф-проверка","нашёл: "+найдено.назв+" · id "+найдено.id+
+          "\nподставил в поле выше. Теперь жми «проверить доступ».");
+        тост("канал найден: <b>"+экр(найдено.назв)+"</b>");
+      })
+      .catch(function(e){писатьВ("ш-сф-проверка","ошибка сети: "+e.message)});
+  }
+
   /* ---------- 4. СКАНИРОВАНИЕ КАНАЛА ПО НОМЕРАМ СООБЩЕНИЙ ---------- */
   function скан(){
     var Т=токен(), К=канал();
     if(!Т){тост("сначала вставь ключ бота (🔑 ключ)",true);return}
     if(!К){тост("сначала задан канал-хранилище",true);return}
-    var ист=String(($("ш-сф-откуда")||{}).value||"").trim();
+    var ист=нормализовать(($("ш-сф-откуда")||{}).value);
+    var полеИ=( $("ш-сф-откуда") ); if(полеИ)полеИ.value=ист;
     var с=parseInt(($("ш-сф-с")||{}).value||"1",10)||1;
     var по=parseInt(($("ш-сф-по")||{}).value||"2000",10)||2000;
     if(!ист){тост("впиши канал старого сайта: -100… или @имя",true);return}
@@ -5651,9 +5741,29 @@ button:focus-visible{outline:2px solid #7fb2ff;outline-offset:2px}
           '<div style="flex:1;min-width:120px"><div class="ш-к-п">по сообщение</div><input class="ш-инп" id="ш-сф-по" value="2000"></div>'+
         '</div>'+
         '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">'+
+          '<button id="ш-сф-пров">проверить доступ к каналу</button>'+
+          '<button id="ш-сф-перес">узнать канал по пересылке</button>'+
+        '</div>'+
+        '<div class="ш-лог" id="ш-сф-проверка">нажми «проверить доступ» — покажу название канала и статус бота в нём.</div>'+
+        '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">'+
           '<button class="p" id="ш-сф-скан">просканировать канал</button>'+
           '<button id="ш-сф-стоп">остановить</button>'+
         '</div>'+
+      '</div>'+
+      '<div class="ш-карт">'+
+        '<div class="ш-к-т">Как добавить бота администратором канала (3 шага)</div>'+
+        '<div class="ш-шаг"><div class="ш-шаг-н">1</div><div class="ш-шаг-т"><b>Открой канал в Telegram</b>'+
+          '<div>тот самый, где лежат старые фото. Нажми на его название сверху.</div></div></div>'+
+        '<div class="ш-шаг"><div class="ш-шаг-н">2</div><div class="ш-шаг-т"><b>Администраторы → Добавить</b>'+
+          '<div>На телефоне: название канала → ✏️ «Изменить» → «Администраторы» → «Добавить администратора». '+
+          'На компьютере: правый клик по каналу → «Управление каналом» → «Администраторы» → «Добавить администратора».</div></div></div>'+
+        '<div class="ш-шаг"><div class="ш-шаг-н">3</div><div class="ш-шаг-т"><b>Введи @имя бота и сохрани</b>'+
+          '<div>Начни печатать имя бота — Telegram сам найдёт его в списке. Включи право <b>«Публикация сообщений»</b> '+
+          '(можно просто оставить все галочки) и нажми «Сохранить». После этого бот сможет читать и пересылать файлы из этого канала.</div>'+
+          '<div id="ш-сф-бот" style="margin-top:8px;color:#9fc6ff"></div>'+
+          '</div></div>'+
+        '<div class="ш-к-п" style="margin-top:10px">Без этого шага Telegram ответит «not enough rights» — это не ошибка сайта, '+
+        'а права в канале. Проверить: кнопка «проверить доступ к каналу» выше — она покажет статус бота в канале.</div>'+
       '</div>'+
       '<div class="ш-карт">'+
         '<div class="ш-к-т">Что происходит</div>'+
@@ -5662,6 +5772,18 @@ button:focus-visible{outline:2px solid #7fb2ff;outline-offset:2px}
     тело.appendChild(с);
     if($("ш-сф-базы"))$("ш-сф-базы").onclick=проверитьБазы;
     if($("ш-сф-взять"))$("ш-сф-взять").onclick=взятьИзБазы;
+    (function(){
+      var Т=токен(); if(!Т){var п=$("ш-сф-бот");if(п)п.textContent="ключ бота ещё не вставлен — нажми «🔑 ключ» справа сверху";return}
+      fetch("https://api.telegram.org/bot"+Т+"/getMe",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"})
+        .then(function(r){return r.json()})
+        .then(function(j){
+          var п=$("ш-сф-бот"); if(!п)return;
+          п.innerHTML=j.ok?('имя твоего бота для поиска в Telegram: <b>@'+экр(j.result.username||"")+'</b>')
+            :("ключ не принят Telegram: "+экр(j.description||""));
+        }).catch(function(){});
+    })();
+    if($("ш-сф-пров"))$("ш-сф-пров").onclick=проверитьДоступ;
+    if($("ш-сф-перес"))$("ш-сф-перес").onclick=узнатьПоПересылке;
     if($("ш-сф-скан"))$("ш-сф-скан").onclick=скан;
     if($("ш-сф-стоп"))$("ш-сф-стоп").onclick=function(){ if(window.__Ш83_СТОП)window.__Ш83_СТОП(); тост("останавливаю…") };
   }
