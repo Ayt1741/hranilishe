@@ -4865,7 +4865,7 @@ header,footer#подвал-главный{display:none!important}
 
 <div id="ш">
   <div id="ш-верх">
-    <div id="ш-лого"><span id="ш-знак">Х</span><span>ХРАНИЛИЩЕ</span><b id="ш-вер">v8.3.1</b></div>
+    <div id="ш-лого"><span id="ш-знак">Х</span><span>ХРАНИЛИЩЕ</span><b id="ш-вер">v8.4</b></div>
     <div id="ш-нав">
       <button class="ш-п on" data-п="файлы">📁 Файлы</button>
       <button class="ш-п" data-п="папки">🗂 Папки</button>
@@ -5799,6 +5799,250 @@ button:focus-visible{outline:2px solid #7fb2ff;outline-offset:2px}
   function старт(){ построить(); }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",function(){setTimeout(старт,260)});
   else setTimeout(старт,260);
+})();
+</script>
+
+<style id="ш-стиль-84">
+#ш-авто-карт{border-color:#2f6b4f;background:#101c17}
+#ш-авто-итог{font-size:13px;color:#cfe9df;margin-top:6px;line-height:1.5}
+.ш-кан{display:flex;gap:10px;align-items:center;padding:10px 12px;background:#0f1620;border:1px solid #22303f;
+  border-radius:10px;margin-top:8px;flex-wrap:wrap}
+.ш-кан-т{flex:1;min-width:180px}
+.ш-кан-н{font-weight:650;font-size:13.5px;word-break:break-all}
+.ш-кан-п{font-size:11.5px;color:#8b97a8;margin-top:2px}
+.ш-кан-с{font-size:11.5px;font-weight:700;padding:3px 8px;border-radius:7px;white-space:nowrap}
+.ш-админ{background:#16352a;color:#7ee2b0;border:1px solid #2f6b4f}
+.ш-нет{background:#3a1e1e;color:#ffb4a2;border:1px solid #6a2b2b}
+.ш-ждём{background:#1d2634;color:#9fb6d6;border:1px solid #2b3a4f}
+.ш-полоса-скан{height:7px;background:#0b0e13;border-radius:5px;overflow:hidden;margin-top:8px}
+.ш-полоса-скан div{height:100%;width:0;background:linear-gradient(90deg,#4f8cff,#33c48d);transition:width .25s}
+</style>
+
+<script>
+/* ============ v8.4: «сделай всё сам» — ищет каналы и тащит старые фото без ввода руками ============ */
+(function(){
+  if(window.__Ш84)return; window.__Ш84=1;
+  function $(и){return document.getElementById(и)}
+  function экр(т){return String(т==null?"":т).replace(/[<>&]/g,function(c){return{"<":"&lt;",">":"&gt;","&":"&amp;"}[c]})}
+  function разм(б){б=+б||0;if(б<1024)return б+" Б";if(б<1048576)return (б/1024).toFixed(0)+" КБ";
+    if(б<1073741824)return (б/1048576).toFixed(1)+" МБ";return (б/1073741824).toFixed(2)+" ГБ"}
+  function Т(){try{return localStorage.getItem("токен-бота")||""}catch(e){return ""}}
+  function К(){try{return localStorage.getItem("канал-хранилище")||""}catch(e){return ""}}
+  function тост(т,зл){ if(window.ш_тост)window.ш_тост(т,зл) }
+  function api(метод,тело){
+    var т=Т();
+    if(!т)return Promise.reject(new Error("нет ключа бота"));
+    return fetch("https://api.telegram.org/bot"+т+"/"+метод,{method:"POST",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify(тело||{})})
+      .then(function(r){return r.json()});
+  }
+  function лог(т,ид){var э=$(ид||"ш-авто-лог"); if(э)э.textContent=т}
+
+  /* ---------- 1. собрать все id каналов, которые вообще есть в этом браузере ---------- */
+  function кандидаты(){
+    var найдено={};
+    function добавить(ид, откуда){
+      ид=String(ид||"").trim();
+      if(!/^-100\d{6,}$/.test(ид))return;
+      if(!найдено[ид])найдено[ид]={ид:ид,откуда:[]};
+      if(найдено[ид].откуда.indexOf(откуда)<0)найдено[ид].откуда.push(откуда);
+    }
+    try{
+      for(var к in localStorage){
+        if(!Object.prototype.hasOwnProperty.call(localStorage,к))continue;
+        var з=String(localStorage.getItem(к)||"");
+        var м=з.match(/-100\d{6,}/g);
+        if(м)м.forEach(function(ид){добавить(ид,к)});
+      }
+    }catch(e){}
+    добавить(К(),"канал-хранилище");
+    return new Promise(function(да){
+      /* плюс папки старого сайта из его базы */
+      var о; try{ о=indexedDB.open("tgdrive") }catch(e){ да(Object.keys(найдено).map(function(и){return найдено[и]})); return }
+      о.onerror=function(){ да(собрать()) };
+      о.onblocked=function(){ да(собрать()) };
+      о.onsuccess=function(){
+        var д=о.result, имена=[];
+        for(var i=0;i<д.objectStoreNames.length;i++)имена.push(д.objectStoreNames[i]);
+        if(!имена.length){д.close();да(собрать());return}
+        var ждём=имена.length;
+        имена.forEach(function(ст){
+          try{
+            var курс=д.transaction(ст,"readonly").objectStore(ст).openCursor();
+            курс.onsuccess=function(e){
+              var к=e.target.result;
+              if(к){
+                var стр=JSON.stringify(к.value||{});
+                var м=стр.match(/-100\d{6,}/g);
+                if(м)м.forEach(function(ид){добавить(ид,"база."+ст)});
+                к.continue();
+              } else if(--ждём===0){д.close();да(собрать())}
+            };
+            курс.onerror=function(){ if(--ждём===0){д.close();да(собрать())} };
+          }catch(e){ if(--ждём===0){д.close();да(собрать())} }
+        });
+      };
+      function собрать(){ return Object.keys(найдено).map(function(и){return найдено[и]}) }
+    });
+  }
+
+  /* ---------- 2. проверить каждый канал: название, тип, права бота ---------- */
+  function проверитьСписок(список){
+    return Promise.all(список.map(function(к){
+      return api("getChat",{chat_id:к.ид}).then(function(ч){
+        if(!ч.ok){ к.статус="нет доступа"; к.ошибка=ч.description||""; к.назв="(не найден)"; return к }
+        к.назв=ч.result.title||ч.result.username||к.ид;
+        к.тип=ч.result.type;
+        return api("getChatMember",{chat_id:к.ид,user_id:к.я}).then(function(у){
+          к.статус=у.ok?(у.result.status||"?"):"нет данных";
+          return к;
+        });
+      }).catch(function(e){ к.статус="ошибка"; к.ошибка=e.message; return к });
+    }));
+  }
+
+  /* ---------- 3. нарисовать список найденных каналов ---------- */
+  function нарисовать(список){
+    var э=$("ш-авто-каналы"); if(!э)return;
+    if(!список.length){ э.innerHTML='<div class="ш-к-п">в этом браузере не нашлось ни одного id канала.</div>'; return }
+    var html="";
+    список.forEach(function(к){
+      var админ=(к.статус==="administrator"||к.статус==="creator");
+      var этохранилище=(String(к.ид)===String(К()));
+      html+='<div class="ш-кан">'+
+        '<div class="ш-кан-т"><div class="ш-кан-н">'+экр(к.назв||к.ид)+'</div>'+
+        '<div class="ш-кан-п">'+к.ид+' · '+(к.тип||"?")+' · нашёл в: '+экр((к.откуда||[]).join(", ").slice(0,60))+
+        (к.ошибка?(' · '+экр(к.ошибка)):"")+(этохранилище?" · это наш канал-хранилище":"")+'</div></div>'+
+        '<span class="ш-кан-с '+(админ?"ш-админ":(к.статус==="member"?"ш-ждём":"ш-нет"))+'">'+
+          (админ?"бот админ":(к.статус==="member"?"бот участник":экр(к.статус)))+'</span>'+
+        (админ&&!этохранилище?('<button class="p" data-скан="'+к.ид+'">тащить из него</button>'):'')+
+        '</div>';
+    });
+    э.innerHTML=html;
+    э.querySelectorAll("[data-скан]").forEach(function(б){ б.onclick=function(){ сканировать(б.dataset.скан, б) } });
+  }
+
+  /* ---------- 4. сканирование: 1..N, не мешая лимиту Telegram ---------- */
+  var СТОП=false;
+  function прогресс(т,доля){
+    var п=$("ш-авто-полоса"); if(п)п.style.width=Math.round((доля||0)*100)+"%";
+    if(т)лог(т);
+  }
+  function сканировать(ид, кнопка){
+    var КХ=К();
+    if(!КХ){тост("сначала ключ и канал-хранилище",true);return}
+    СТОП=false;
+    var до=parseInt((localStorage.getItem("ш-скан-до")||"400"),10)||400;
+    var найдено=0, прошёл=0, пусто=0, i=1;
+    if(кнопка){кнопка.disabled=true;кнопка.textContent="тащу…"}
+    function шаг(){
+      if(СТОП){прогресс("остановлено на сообщении "+i+" · найдено файлов: "+найдено);if(кнопка){кнопка.disabled=false;кнопка.textContent="тащить из него"}return}
+      if(i>до){
+        прогресс("дошёл до "+до+" · найдено файлов: "+найдено+" · пустых сообщений: "+пусто,1);
+        тост("готово: <b>"+найдено+"</b> файлов из этого канала");
+        try{window.__ХР&&window.__ХР.нарисовать()}catch(e){}
+        if(кнопка){кнопка.disabled=false;кнопка.textContent="тащить из него"}
+        return;
+      }
+      прогресс("сообщение "+i+" из "+до+" · найдено: "+найдено, i/до);
+      api("forwardMessage",{chat_id:КХ, from_chat_id:ид, message_id:i}).then(function(j){
+        if(j.ok){
+          var р=j.result||{}, д=р.document||р.video||р.audio||р.animation||(р.photo&&р.photo[р.photo.length-1]);
+          if(д){
+            var имя=д.file_name||("фото от "+new Date((р.date||0)*1000).toLocaleDateString("ru-RU"));
+            var рб=д.file_size||0;
+            try{
+              var А=window.ХРАНИЛИЩЕ||{};
+              if(А.запомнить)А.запомнить(имя+"|"+рб+"|"+(р.date||0),
+                {и:имя,р:рб,f:д.file_id||"",ч:1,д:р.date||0,о:"склад",т:д.mime_type||"",
+                 п:"Из старого канала",мсг:р.message_id||0,чат:КХ});
+            }catch(e){}
+            найдено++;
+          } else пусто++;
+          прошёл++;
+        } else {
+          пусто++;
+          if(/not enough rights|chat not found|have no rights/i.test(j.description||"")){
+            прогресс("Telegram не пускает в канал "+ид+": "+j.description+"\n\nБот должен быть администратором этого канала.");
+            тост("нет прав в канале",true);
+            if(кнопка){кнопка.disabled=false;кнопка.textContent="тащить из него"}
+            return;
+          }
+        }
+        i++;
+        setTimeout(шаг, 1150);
+      }).catch(function(){ i++; setTimeout(шаг,1300) });
+    }
+    шаг();
+  }
+
+  /* ---------- 5. карточка «всё сам» на странице «Старые фото» ---------- */
+  function построить(){
+    var стр=document.querySelector('[data-стр="старые"]'); if(!стр||$("ш-авто-карт"))return;
+    var к=document.createElement("div"); к.className="ш-карт"; к.id="ш-авто-карт";
+    к.innerHTML=
+      '<div class="ш-к-т" style="font-size:15px">Одна кнопка — и всё само</div>'+
+      '<div class="ш-к-п">Сайт сам перебирает все каналы, которые знает этот браузер, проверяет, где бот админ, '+
+      'и тащит из них файлы. Ничего вписывать не надо. Ручной ввод ниже больше не нужен.</div>'+
+      '<div class="ш-авто-итог" id="ш-авто-итог">готов проверить. ключ бота: '+(Т()?"есть":"НЕТ")+
+        ' · канал-хранилище: '+экр(К()||"не задан")+'</div>'+
+      '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">'+
+        '<button class="p" id="ш-авто-старт">найти и перенести старые фото</button>'+
+        '<button id="ш-авто-стоп">остановить</button>'+
+      '</div>'+
+      '<div class="ш-авто-итог" id="ш-авто-итог2"></div>'+
+      '<div class="ш-кан-н" style="margin-top:12px;font-size:12.5px;color:#9aa6b8">НАЙДЕННЫЕ КАНАЛЫ</div>'+
+      '<div id="ш-авто-каналы"><div class="ш-к-п">ещё не проверял — нажми кнопку выше</div></div>'+
+      '<div class="ш-лог" id="ш-авто-лог" style="margin-top:10px">ждёт запуска.</div>'+
+      '<div class="ш-полоса-скан"><div id="ш-авто-полоса"></div></div>';
+    стр.insertBefore(к, стр.firstChild);
+    /* прячем старый ручной блок, чтобы не путал */
+    var ручные=стр.querySelectorAll(".ш-карт");
+    for(var i=0;i<ручные.length;i++){
+      if(ручные[i].id==="ш-авто-карт")continue;
+      var тх=ручные[i].textContent||"";
+      if(/Шаг 1 — что вообще есть|Шаг 2 — просканировать|Как добавить бота администратором/.test(тх))ручные[i].style.display="none";
+    }
+    $("ш-авто-старт").onclick=старт;
+    $("ш-авто-стоп").onclick=function(){СТОП=true;тост("останавливаю…")};
+    if(!Т())лог("ключ бота не введён — сначала нажми «🔑 ключ» справа сверху и вставь ключ.");
+  }
+  function старт(){
+    if(!Т()){тост("сначала вставь ключ бота (🔑 ключ)",true);return}
+    var б=$("ш-авто-старт"); if(б){б.disabled=true;б.textContent="ищу…"}
+    лог("смотрю, какие каналы знает этот браузер…");
+    api("getMe").then(function(я){
+      var мой=(я.result&&я.result.id)||0;
+      return кандидаты().then(function(сп){
+        лог("нашёл "+сп.length+" id каналов — проверяю доступ…");
+        return проверитьСписок(сп.map(function(х){х.я=мой;return х})).then(function(гот){
+          нарисовать(гот);
+          var подходящие=гот.filter(function(к){
+            return (к.статус==="administrator"||к.статус==="creator") && String(к.ид)!==String(К());
+          });
+          $("ш-авто-итог2").innerHTML=
+            "проверено каналов: "+гот.length+" · где бот админ: "+подходящие.length+
+            (подходящие.length?" — начинаю тащить из «"+экр(подходящие[0].назв||подходящие[0].ид)+"»":
+              "<br><br>Ни в одном канале бот не админ. Список выше — это все каналы, которые вообще есть в этом браузере. "+
+              "Если среди них есть твой старый канал — нажми у него «тащить из него» и добавь бота админом в Telegram.");
+          if(подходящие.length)сканировать(подходящие[0].ид,null);
+          else тост("бот нигде не админ",true);
+          if(б){б.disabled=false;б.textContent="найти и перенести старые фото"}
+        });
+      });
+    }).catch(function(e){
+      лог("не смог: "+e.message); тост("ошибка: "+e.message,true);
+      if(б){б.disabled=false;б.textContent="найти и перенести старые фото"}
+    });
+  }
+  window.ш_авто={старт:старт, кандидаты:кандидаты};
+  function готово(){
+    построить();
+  }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",function(){setTimeout(готово,400)});
+  else setTimeout(готово,400);
+  /* страница создаётся оболочкой позже — проверим ещё раз */
+  setInterval(function(){ if(!$("ш-авто-карт"))построить(); }, 2500);
 })();
 </script>
 
