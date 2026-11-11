@@ -1262,8 +1262,8 @@ function разовоВФото(){
     РАСКЛАДКА[ключР(ф)]="Фото"; РАСКЛАДКА_ИМЯ[ключИ(ф)]="Фото"; ф.п="Фото";
     перенесено++;
   }
-  активПапка="Фото";
-  try{localStorage.setItem("активная-папка","Фото")}catch(e){}
+  /* v8.3: кнопка «перенести в «Фото»» больше НЕ переключает открытую папку —
+     раньше из-за этого карточка заливки начинала писать «Заливаю в папку «Фото»». */
   if(перенесено)сохранитьПапки();
   return перенесено;
 }
@@ -4865,7 +4865,7 @@ header,footer#подвал-главный{display:none!important}
 
 <div id="ш">
   <div id="ш-верх">
-    <div id="ш-лого"><span id="ш-знак">Х</span><span>ХРАНИЛИЩЕ</span><b id="ш-вер">v8.2</b></div>
+    <div id="ш-лого"><span id="ш-знак">Х</span><span>ХРАНИЛИЩЕ</span><b id="ш-вер">v8.3</b></div>
     <div id="ш-нав">
       <button class="ш-п on" data-п="файлы">📁 Файлы</button>
       <button class="ш-п" data-п="папки">🗂 Папки</button>
@@ -5302,6 +5302,381 @@ header,footer#подвал-главный{display:none!important}
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",function(){setTimeout(добавить,200)});
   else setTimeout(добавить,200);
+})();
+</script>
+
+<style id="ш-стиль-83">
+/* ===== ЖИВЫЕ КНОПКИ: видно, что попал ===== */
+button, .pap, .tab, .ш-п, .ш-ряд, .ш-пап, .f{
+  transition:transform .07s ease, box-shadow .18s ease, background .15s ease, border-color .15s ease, filter .12s ease;
+  touch-action:manipulation;
+}
+button:active, .pap:active, .tab:active, .ш-п:active{
+  transform:scale(.955); filter:brightness(1.22);
+}
+button:focus-visible{outline:2px solid #7fb2ff;outline-offset:2px}
+.ш-тап{
+  position:relative; overflow:hidden;
+}
+.ш-волна{
+  position:absolute; border-radius:50%; transform:scale(0); opacity:.55;
+  background:#8fc0ff; pointer-events:none; animation:ш-волна .55s ease-out forwards;
+}
+@keyframes ш-волна{ to{transform:scale(2.6); opacity:0} }
+.ш-ок{ animation:ш-ок .5s ease }
+@keyframes ш-ок{
+  0%{box-shadow:0 0 0 0 rgba(51,196,141,.85)}
+  100%{box-shadow:0 0 0 14px rgba(51,196,141,0)}
+}
+
+/* ===== ТОСТ: «нажал — сработало» ===== */
+#ш-тосты{position:fixed;right:14px;bottom:14px;z-index:80;display:flex;flex-direction:column;gap:8px;
+  max-width:min(360px,86vw);pointer-events:none}
+.ш-тост{background:#16202c;border:1px solid #2b3a4f;border-radius:11px;padding:9px 12px;font-size:12.5px;
+  color:#dfe8f5;box-shadow:0 8px 28px rgba(0,0,0,.55);animation:ш-тост-вх .22s ease-out;line-height:1.35}
+.ш-тост b{color:#9fe3bd}
+.ш-тост .ш-ошибка{color:#ffb4a2}
+@keyframes ш-тост-вх{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+/* ===== страница «Старые фото» ===== */
+.ш-инп{width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--line);background:#0b0e13;
+  color:var(--txt);font-size:14px;font-family:inherit;margin-top:6px}
+.ш-лог{background:#0b0e13;border:1px solid var(--line);border-radius:11px;padding:10px;margin-top:10px;
+  font-size:12px;color:#b8c6d8;max-height:230px;overflow:auto;white-space:pre-wrap;font-family:ui-monospace,Menlo,monospace}
+.ш-база{border:1px solid var(--line);border-radius:11px;padding:10px;margin-top:8px;background:#131a24;font-size:13px}
+.ш-база b{color:#9fc6ff}
+.ш-шаги{counter-reset:ш}
+.ш-шаг{display:flex;gap:10px;margin-top:10px;align-items:flex-start}
+.ш-шаг-н{flex:0 0 24px;height:24px;border-radius:50%;background:#22304a;color:#9fc6ff;font-weight:700;
+  display:flex;align-items:center;justify-content:center;font-size:12px}
+.ш-шаг-т{flex:1;min-width:0}
+.ш-шаг-т b{font-size:13.5px}
+.ш-шаг-т div{font-size:12px;color:var(--dim);margin-top:2px}
+@media(max-width:720px){ #ш-тосты{left:12px;right:12px;max-width:none} }
+</style>
+
+<div id="ш-тосты"></div>
+
+<script>
+/* ================= v8.3: отклик кнопок + страница «Старые фото» ================= */
+(function(){
+  if(window.__Ш83)return; window.__Ш83=1;
+  function $(и){return document.getElementById(и)}
+  function экр(т){return String(т==null?"":т).replace(/[<>&]/g,function(c){return{"<":"&lt;",">":"&gt;","&":"&amp;"}[c]})}
+  function разм(б){б=+б||0;if(б<1024)return б+" Б";if(б<1048576)return (б/1024).toFixed(0)+" КБ";
+    if(б<1073741824)return (б/1048576).toFixed(1)+" МБ";return (б/1073741824).toFixed(2)+" ГБ"}
+  function токен(){try{return localStorage.getItem("токен-бота")||""}catch(e){return ""}}
+  function канал(){try{return localStorage.getItem("канал-хранилище")||""}catch(e){return ""}}
+
+  /* ---------- 1. ТОСТЫ И ВОЛНА НА КНОПКАХ ---------- */
+  function тост(т, ошибка){
+    var в=$("ш-тосты"); if(!в)return;
+    var б=document.createElement("div"); б.className="ш-тост";
+    б.innerHTML=ошибка?('<span class="ш-ошибка">'+т+'</span>'):т;
+    в.appendChild(б);
+    setTimeout(function(){б.style.transition="opacity .3s";б.style.opacity="0";setTimeout(function(){б.remove()},320)}, ошибка?9000:3600);
+    while(в.children.length>4)в.firstChild.remove();
+  }
+  window.ш_тост=тост;
+
+  document.addEventListener("pointerdown",function(e){
+    var к=e.target.closest("button, .pap, .tab, .ш-п"); if(!к)return;
+    к.classList.add("ш-тап");
+    var r=к.getBoundingClientRect(), d=Math.max(r.width,r.height);
+    var в=document.createElement("span"); в.className="ш-волна";
+    в.style.width=в.style.height=d+"px";
+    в.style.left=(e.clientX-r.left-d/2)+"px";
+    в.style.top=(e.clientY-r.top-d/2)+"px";
+    к.appendChild(в);
+    setTimeout(function(){в.remove()},560);
+  },true);
+
+  document.addEventListener("click",function(e){
+    var к=e.target.closest("button, .pap, .tab, .ш-п"); if(!к)return;
+    к.classList.remove("ш-ок"); void к.offsetWidth; к.classList.add("ш-ок");
+    if(к.disabled){тост("кнопка недоступна сейчас",true);return}
+    var подпись=(к.textContent||"").replace(/\s+/g," ").trim().slice(0,42);
+    тост("✓ нажато: <b>"+экр(подпись)+"</b>");
+  },true);
+
+  /* ---------- 2. ДИАГНОСТИКА: что вообще лежит в браузере ---------- */
+  function всеБазы(){
+    if(!indexedDB.databases)return Promise.resolve(["indexedDB.databases() нет — старый браузер; проверяю только tgdrive"]);
+    return indexedDB.databases().then(function(р){return (р||[]).map(function(д){return д.name})});
+  }
+  function сведения(имя){
+    return new Promise(function(да){
+      var з; try{ з=indexedDB.open(имя) }catch(e){ да("  "+имя+": не открылась"); return }
+      з.onerror=function(){да("  "+имя+": ошибка "+((з.error&&з.error.name)||""))};
+      з.onblocked=function(){да("  "+имя+": занята другой вкладкой")};
+      з.onsuccess=function(){
+        var д=з.result, сто=[], имена=[];
+        for(var i=0;i<д.objectStoreNames.length;i++)имена.push(д.objectStoreNames[i]);
+        if(!имена.length){ д.close(); да("  "+имя+": пустая (нет хранилищ)"); return }
+        var осталось=имена.length;
+        имена.forEach(function(ст){
+          var т; try{ т=д.transaction(ст,"readonly").objectStore(ст).count() }catch(e){ сто.push(ст+"=?"); if(--осталось===0)конец(); return }
+          т.onsuccess=function(){ сто.push(ст+"="+т.result); if(--осталось===0)конец() };
+          т.onerror=function(){ сто.push(ст+"=?"); if(--осталось===0)конец() };
+        });
+        function конец(){ д.close(); да("  "+имя+": "+сто.join(", ")) }
+      };
+    });
+  }
+  function проверитьБазы(){
+    var лог=$("ш-сф-лог"); if(лог)лог.textContent="смотрю базы браузера…";
+    return всеБазы().then(function(имена){
+      if(typeof имена[0]==="string" && имена[0].indexOf("нет")>=0){ if(лог)лог.textContent=имена[0]; return }
+      if(!имена.length){ if(лог)лог.textContent="в браузере нет ни одной базы этого сайта — значит старый сайт тут не заливался"; return }
+      return Promise.all(имена.map(сведения)).then(function(строки){
+        var т="базы этого сайта ("+имена.length+"):\n"+строки.join("\n");
+        if(лог)лог.textContent=т;
+        тост("проверил "+имена.length+" баз — смотри список ниже");
+        return т;
+      });
+    }).catch(function(e){ if(лог)лог.textContent="ошибка: "+e.message });
+  }
+
+  /* ---------- 3. ВЗЯТЬ ЗАПИСИ ИЗ БАЗЫ СТАРОГО САЙТА ---------- */
+  function читать(idb, имя){
+    return new Promise(function(да){
+      var д=idb.result;
+      if(!д.objectStoreNames.contains(имя)){ да([]); return }
+      var т=д.transaction(имя,"readonly").objectStore(имя), курс=т.openCursor(), out=[];
+      курс.onsuccess=function(e){var к=e.target.result; if(к){out.push(к.value);к.continue()} else да(out)};
+      курс.onerror=function(){да([])};
+    });
+  }
+  function взятьИзБазы(){
+    var лог=$("ш-сф-лог");
+    function писать(т){ if(лог)лог.textContent=т }
+    писать("открываю базу старого сайта tgdrive…");
+    return new Promise(function(да){
+      var о; try{ о=indexedDB.open("tgdrive") }catch(e){ писать("не смог открыть базу: "+e.message); да(null); return }
+      о.onerror=function(){ писать("база tgdrive не открылась: "+((о.error&&о.error.name)||"")); да(null) };
+      о.onblocked=function(){ писать("база занята другой вкладкой — закрой старую вкладку сайта и повтори"); да(null) };
+      о.onsuccess=function(){
+        Promise.all([читать(о,"files"),читать(о,"folders")]).then(function(р){
+          var файлы=р[0]||[], папки=р[1]||[];
+          о.result.close();
+          if(!файлы.length){
+            писать("в базе старого сайта 0 файлов.\n\nЗначит старый сайт в этом браузере ничего не заливал\n"+
+              "(база у каждого браузера и устройства своя). Файлы остались в Telegram —\n"+
+              "их надо тянуть оттуда: шаг 2 ниже.");
+            тост("в базе браузера 0 файлов — тяну из Telegram",true);
+            да({файлы:[],папки:[]}); return;
+          }
+          var именаПапок={}; папки.forEach(function(п){именаПапок[п.id]=п.title||("канал "+п.id)});
+          писать("в базе старого сайта: файлов "+файлы.length+", папок "+папки.length+"\n\n"+
+            файлы.slice(0,12).map(function(ф){return "• "+ф.name+" · "+разм(ф.size)+" · "+(именаПапок[ф.folderId]||ф.folderId)}).join("\n")+
+            (файлы.length>12?("\n… и ещё "+(файлы.length-12)):""));
+          window.__Ш83_СТАРОЕ={файлы:файлы,папки:папки,имена:именаПапок};
+          нарисоватьПапкиСтарые();
+          тост("нашёл в базе старого сайта <b>"+файлы.length+"</b> файлов");
+          да({файлы:файлы,папки:папки});
+        });
+      };
+    });
+  }
+
+  function нарисоватьПапкиСтарые(){
+    var с=$("ш-сф-источники"); if(!с)return;
+    var д=window.__Ш83_СТАРОЕ; if(!д||!д.файлы.length){с.innerHTML="";return}
+    var по={};
+    д.файлы.forEach(function(ф){
+      var к=String(ф.folderId||"");
+      по[к]=по[к]||{имя:д.имена[к]||("канал "+к), файлов:0, байт:0};
+      по[к].файлов++; по[к].байт+=(ф.size||0);
+    });
+    var html='<div class="ш-к-т" style="margin-top:14px">Откуда тянуть</div>';
+    Object.keys(по).forEach(function(к){
+      html+='<div class="ш-база"><b>'+экр(по[к].имя)+'</b> · id '+к+'<br>'+
+        по[к].файлов+' файлов · '+разм(по[к].байт)+'<br>'+
+        '<button class="p" style="margin-top:8px" data-тян="'+к+'">перенести эти файлы в мой канал</button></div>';
+    });
+    с.innerHTML=html;
+    с.querySelectorAll("[data-тян]").forEach(function(б){
+      б.onclick=function(){ тянутьИзБазы(б.dataset.тян, б) };
+    });
+    var поле=$("ш-сф-откуда");
+    if(поле && !поле.value){ поле.value=Object.keys(по)[0]||""; }
+  }
+
+  /* перенос записей старого сайта: сообщение копируется ботом в канал, получаем свой file_id */
+  function тянутьИзБазы(идКанала, кнопка){
+    var Т=токен(), К=канал();
+    if(!Т){тост("сначала вставь ключ бота (🔑 ключ)",true);return}
+    if(!К){тост("сначала задан канал-хранилище",true);return}
+    var д=window.__Ш83_СТАРОЕ; if(!д)return;
+    var мои=д.файлы.filter(function(ф){return String(ф.folderId)===String(идКанала)});
+    if(!мои.length){тост("в этой папке нет записей",true);return}
+    if(кнопка){кнопка.disabled=true;кнопка.textContent="переношу…"}
+    var лог=$("ш-сф-лог"), i=0, ок=0, нет=0;
+    function писать(т){ if(лог)лог.textContent=т }
+    function шаг(){
+      if(i>=мои.length){
+        if(кнопка){кнопка.disabled=false;кнопка.textContent="перенести эти файлы в мой канал"}
+        писать("готово: перенесено "+ок+", не вышло "+нет+" из "+мои.length+
+          "\nФайлы появились в списке сайта — открой «Файлы».");
+        тост("перенесено <b>"+ок+"</b> файлов"+(нет?(", ошибок "+нет):""));
+        try{window.__ХР&&window.__ХР.нарисовать()}catch(e){}
+        return;
+      }
+      var ф=мои[i];
+      var мсг=ф.messageId||(ф.messageIds&&ф.messageIds[0]);
+      if(!мсг){i++;нет++;setTimeout(шаг,80);return}
+      писать("переношу "+(i+1)+" из "+мои.length+": "+ф.name+" …");
+      fetch("https://api.telegram.org/bot"+Т+"/forwardMessage",{method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({chat_id:К, from_chat_id:идКанала, message_id:мсг})})
+        .then(function(r){return r.json()})
+        .then(function(j){
+          if(!j.ok){
+            нет++;
+            var о=(j.description||"");
+            if(i===0)писать("Telegram не дал перенести:\n"+о+
+              "\n\nПохоже, бот не администратор этого канала.\nДобавь бота в канал «"+(д.имена[идКанала]||идКанала)+"» админом и повтори.");
+            setTimeout(шаг,700); return;
+          }
+          var р=j.result||{}, док=р.document||р.video||р.audio||(р.photo&&р.photo[р.photo.length-1])||{};
+          var имя=док.file_name||ф.name||("файл "+мсг);
+          var размБ=док.file_size||ф.size||0;
+          var запись={и:имя, р:размБ, f:док.file_id||"", ч:1, д:Math.floor((р.date||Date.now()/1000)),
+            о:"склад", т:ф.mimeType||"", п:(д.имена[идКанала]||""), мсг:р.message_id||0, чат:К};
+          try{
+            var А=window.ХРАНИЛИЩЕ||{};
+            if(А.запомнить)А.запомнить(имя+"|"+размБ+"|0", запись);
+          }catch(e){}
+          ок++;
+          setTimeout(шаг, 1100);   // лимит Telegram ~1 сообщение в секунду
+        })
+        .catch(function(e){ нет++; setTimeout(шаг,900) });
+      i++;
+    }
+    шаг();
+  }
+
+  /* ---------- 4. СКАНИРОВАНИЕ КАНАЛА ПО НОМЕРАМ СООБЩЕНИЙ ---------- */
+  function скан(){
+    var Т=токен(), К=канал();
+    if(!Т){тост("сначала вставь ключ бота (🔑 ключ)",true);return}
+    if(!К){тост("сначала задан канал-хранилище",true);return}
+    var ист=String(($("ш-сф-откуда")||{}).value||"").trim();
+    var с=parseInt(($("ш-сф-с")||{}).value||"1",10)||1;
+    var по=parseInt(($("ш-сф-по")||{}).value||"2000",10)||2000;
+    if(!ист){тост("впиши канал старого сайта: -100… или @имя",true);return}
+    if(по<с){тост("номер «по» меньше номера «с»",true);return}
+    var лог=$("ш-сф-лог"), найдено=0, пусто=0, n=с, б=$("ш-сф-скан");
+    if(б){б.disabled=true;б.textContent="сканирую…"}
+    var стоп=false; window.__Ш83_СТОП=function(){стоп=true};
+    function писать(т){ if(лог)лог.textContent=т }
+    function шаг(){
+      if(стоп){ if(б){б.disabled=false;б.textContent="просканировать канал"} ;
+        писать("остановлено на сообщении "+n+"\nнайдено файлов: "+найдено); return }
+      if(n>по){
+        if(б){б.disabled=false;б.textContent="просканировать канал"}
+        писать("готово: найдено "+найдено+" файлов, пустых сообщений "+пусто+"\n"+
+          "Файлы появились в списке сайта — открой «Файлы».");
+        тост("нашёл <b>"+найдено+"</b> файлов в канале");
+        try{window.__ХР&&window.__ХР.нарисовать()}catch(e){}
+        return;
+      }
+      писать("смотрю сообщение "+n+" из "+по+" · найдено файлов: "+найдено);
+      fetch("https://api.telegram.org/bot"+Т+"/forwardMessage",{method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({chat_id:К, from_chat_id:ист, message_id:n})})
+        .then(function(r){return r.json()})
+        .then(function(j){
+          if(j.ok){
+            var р=j.result||{}, док=р.document||р.video||р.audio||(р.photo&&р.photo[р.photo.length-1]);
+            if(док){
+              var имя=док.file_name||("файл от "+new Date((р.date||0)*1000).toLocaleDateString("ru-RU"));
+              var рб=док.file_size||0;
+              var запись={и:имя,р:рб,f:док.file_id||"",ч:1,д:р.date||0,о:"склад",т:"",
+                п:"Из старого канала",мсг:р.message_id||0,чат:К};
+              try{var А=window.ХРАНИЛИЩЕ||{};if(А.запомнить)А.запомнить(имя+"|"+рб+"|"+(р.date||0),запись)}catch(e){}
+              найдено++;
+            } else пусто++;
+          } else {
+            пусто++;
+            if(j.error_code===400 && j.description && /chat not found|not enough rights|have no rights/i.test(j.description)){
+              if(б){б.disabled=false;б.textContent="просканировать канал"}
+              писать("Telegram не пускает в канал «"+ист+"»:\n"+j.description+
+                "\n\nДобавь бота администратором этого канала и повтори.");
+              return;
+            }
+          }
+          n++;
+          setTimeout(шаг, 1100);
+        })
+        .catch(function(){ n++; setTimeout(шаг,1200) });
+    }
+    шаг();
+  }
+
+  /* ---------- 5. страница в интерфейсе ---------- */
+  function построить(){
+    var нав=document.querySelector("#ш-нав"); if(!нав||$("ш-п-старые"))return;
+    var к=document.createElement("button");
+    к.className="ш-п"; к.id="ш-п-старые"; к.dataset.п="старые"; к.textContent="📦 Старые фото";
+    нав.appendChild(к);
+    var тело=document.querySelector("#ш-тело"); if(!тело)return;
+    var с=document.createElement("section");
+    с.className="ш-стр"; с.dataset.стр="старые";
+    с.innerHTML=
+      '<div class="ш-карт">'+
+        '<div class="ш-к-т">Перенос старых фото в этот сайт</div>'+
+        '<div class="ш-к-п">Старый сайт хранил список файлов в базе браузера, а сами файлы — в Telegram. '+
+        'База у каждого браузера и устройства своя, поэтому «само» ничего не переезжает. '+
+        'Ниже два пути: взять список из базы (если старый сайт заливался в этом браузере) '+
+        'или просканировать канал старого сайта напрямую (работает всегда, если бот админ в том канале).</div>'+
+      '</div>'+
+      '<div class="ш-карт">'+
+        '<div class="ш-к-т">Шаг 1 — что вообще есть в этом браузере</div>'+
+        '<div class="ш-шаг"><div class="ш-шаг-н">1</div><div class="ш-шаг-т">'+
+          '<b>Проверить базы браузера</b><div>покажет все базы сайта и сколько в них записей</div>'+
+          '<button id="ш-сф-базы" style="margin-top:8px">проверить, что лежит в браузере</button>'+
+          '<button id="ш-сф-взять" style="margin-top:8px;margin-left:6px">взять список из базы</button>'+
+        '</div></div>'+
+        '<div id="ш-сф-источники"></div>'+
+      '</div>'+
+      '<div class="ш-карт">'+
+        '<div class="ш-к-т">Шаг 2 — просканировать канал старого сайта</div>'+
+        '<div class="ш-к-п">Бот идёт по номерам сообщений канала и переносит найденные файлы в твой канал-хранилище. '+
+        'Скорость — примерно одно сообщение в секунду (лимит Telegram). 1000 сообщений ≈ 17 минут, можно остановить и продолжить.</div>'+
+        '<div style="margin-top:10px"><div class="ш-к-п">канал старого сайта: id вида -100… или @имя</div>'+
+        '<input class="ш-инп" id="ш-сф-откуда" placeholder="-1001234567890 или @staryi_kanal"></div>'+
+        '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">'+
+          '<div style="flex:1;min-width:120px"><div class="ш-к-п">с сообщения</div><input class="ш-инп" id="ш-сф-с" value="1"></div>'+
+          '<div style="flex:1;min-width:120px"><div class="ш-к-п">по сообщение</div><input class="ш-инп" id="ш-сф-по" value="2000"></div>'+
+        '</div>'+
+        '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">'+
+          '<button class="p" id="ш-сф-скан">просканировать канал</button>'+
+          '<button id="ш-сф-стоп">остановить</button>'+
+        '</div>'+
+      '</div>'+
+      '<div class="ш-карт">'+
+        '<div class="ш-к-т">Что происходит</div>'+
+        '<div class="ш-лог" id="ш-сф-лог">пока ничего не запускалось.</div>'+
+      '</div>';
+    тело.appendChild(с);
+    if($("ш-сф-базы"))$("ш-сф-базы").onclick=проверитьБазы;
+    if($("ш-сф-взять"))$("ш-сф-взять").onclick=взятьИзБазы;
+    if($("ш-сф-скан"))$("ш-сф-скан").onclick=скан;
+    if($("ш-сф-стоп"))$("ш-сф-стоп").onclick=function(){ if(window.__Ш83_СТОП)window.__Ш83_СТОП(); тост("останавливаю…") };
+  }
+
+  /* показать страницу по кнопке (у оболочки свой обработчик — добавим свой) */
+  document.addEventListener("click",function(e){
+    var к=e.target.closest('[data-п="старые"]'); if(!к)return;
+    document.querySelectorAll("#ш-нав .ш-п").forEach(function(б){б.classList.toggle("on",б.dataset.п==="старые")});
+    document.querySelectorAll("#ш-тело .ш-стр").forEach(function(с){с.classList.toggle("on",с.dataset.стр==="старые")});
+    window.scrollTo(0,0);
+  },false);
+
+  function старт(){ построить(); }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",function(){setTimeout(старт,260)});
+  else setTimeout(старт,260);
 })();
 </script>
 
