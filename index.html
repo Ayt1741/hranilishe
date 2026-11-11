@@ -4865,7 +4865,7 @@ header,footer#подвал-главный{display:none!important}
 
 <div id="ш">
   <div id="ш-верх">
-    <div id="ш-лого"><span id="ш-знак">Х</span><span>ХРАНИЛИЩЕ</span><b id="ш-вер">v8.5</b></div>
+    <div id="ш-лого"><span id="ш-знак">Х</span><span>ХРАНИЛИЩЕ</span><b id="ш-вер">v8.6</b></div>
     <div id="ш-нав">
       <button class="ш-п on" data-п="файлы">📁 Файлы</button>
       <button class="ш-п" data-п="папки">🗂 Папки</button>
@@ -6305,6 +6305,290 @@ button:focus-visible{outline:2px solid #7fb2ff;outline-offset:2px}
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",function(){setTimeout(старт,700)});
   else setTimeout(старт,700);
   setInterval(старт,3000);
+})();
+</script>
+
+<style id="ш-стиль-86">
+.ш-чат{display:flex;gap:10px;align-items:center;padding:11px 13px;background:#0f1620;border:1px solid #22303f;
+  border-radius:11px;margin-top:8px;flex-wrap:wrap}
+.ш-чат-т{flex:1;min-width:190px}
+.ш-чат-н{font-weight:650;font-size:13.5px}
+.ш-чат-п{font-size:11.5px;color:#8b97a8;margin-top:2px;word-break:break-all}
+.ш-бейдж{font-size:11.5px;font-weight:700;padding:3px 8px;border-radius:7px;white-space:nowrap}
+.ш-б-ок{background:#16352a;color:#7ee2b0;border:1px solid #2f6b4f}
+.ш-б-чат{background:#1b2a44;color:#9fc6ff;border:1px solid #2b4a7a}
+.ш-б-нет{background:#3a1e1e;color:#ffb4a2;border:1px solid #6a2b2b}
+</style>
+
+<script>
+/* ===== v8.6: ищем старые фото ТАМ, ГДЕ ОНИ ЕСТЬ — в личном чате с ботом, а не только в каналах ===== */
+(function(){
+  if(window.__Ш86)return; window.__Ш86=1;
+  function $(и){return document.getElementById(и)}
+  function экр(т){return String(т==null?"":т).replace(/[<>&]/g,function(c){return{"<":"&lt;",">":"&gt;","&":"&amp;"}[c]})}
+  function Т(){try{return localStorage.getItem("токен-бота")||""}catch(e){return ""}}
+  function КХ(){try{return localStorage.getItem("канал-хранилище")||""}catch(e){return ""}}
+  function тост(т,зл){ if(window.ш_тост)window.ш_тост(т,зл) }
+  var МОЙ_ЧАТ="7023156818";          /* личный чат с ботом — туда писал старый сайт */
+  function api(метод,тело){
+    var т=Т(); if(!т)return Promise.reject(new Error("нет ключа бота"));
+    return fetch("https://api.telegram.org/bot"+т+"/"+метод,{method:"POST",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify(тело||{})}).then(function(r){return r.json()});
+  }
+  function лог(т){var э=$("ш-авто-лог"); if(э)э.textContent=т}
+
+  /* ---- 1. все чаты и каналы, которые знает браузер: и -100…, и обычные номера ---- */
+  function кандидаты2(){
+    var найд={};
+    function добавить(ид,откуда){
+      ид=String(ид==null?"":ид).trim().replace(/^chat_?/,"");
+      if(!/^-?\d{6,14}$/.test(ид))return;
+      if(ид==="0"||ид==="1")return;
+      if(!найд[ид])найд[ид]={ид:ид,откуда:[]};
+      if(найд[ид].откуда.indexOf(откуда)<0)найд[ид].откуда.push(откуда);
+    }
+    добавить(МОЙ_ЧАТ,"личный чат бота (по умолчанию)");
+    добавить(КХ(),"канал-хранилище");
+    try{
+      for(var к in localStorage){
+        if(!Object.prototype.hasOwnProperty.call(localStorage,к))continue;
+        var з=String(localStorage.getItem(к)||"");
+        var м=з.match(/-?\d{6,14}/g);
+        if(м)м.forEach(function(ид){добавить(ид,"память."+к)});
+      }
+    }catch(e){}
+    return new Promise(function(да){
+      var о; try{ о=indexedDB.open("tgdrive") }catch(e){ return да(собрать()) }
+      о.onerror=function(){ да(собрать()) };
+      о.onblocked=function(){ да(собрать()) };
+      о.onsuccess=function(){
+        var д=о.result, имена=[];
+        for(var i=0;i<д.objectStoreNames.length;i++)имена.push(д.objectStoreNames[i]);
+        if(!имена.length){ try{д.close()}catch(e){} да(собрать()); return }
+        var осталось=имена.length;
+        function финиш(){ if(--осталось===0){ try{д.close()}catch(e){}; да(собрать()) } }
+        имена.forEach(function(ст){
+          try{
+            var курс=д.transaction(ст,"readonly").objectStore(ст).openCursor();
+            курс.onsuccess=function(e){
+              var к=e.target.result;
+              if(к){
+                var з=к.value||{};
+                ["chatId","chat_id","folderId","folder_id","id"].forEach(function(п){
+                  if(з[п]!==undefined&&з[п]!==null)добавить(з[п],"база."+ст+"."+п);
+                });
+                var стр=JSON.stringify(з), м=стр.match(/-?\d{6,14}/g);
+                if(м)м.forEach(function(ид){добавить(ид,"база."+ст)});
+                к.continue();
+              } else финиш();
+            };
+            курс.onerror=финиш;
+          }catch(e){финиш()}
+        });
+      };
+      function собрать(){ return Object.keys(найд).map(function(и){return найд[и]}) }
+    });
+  }
+
+  /* ---- 2. проверить: что это за чат и пустит ли Telegram ---- */
+  function проверить2(список){
+    return Promise.all(список.map(function(к){
+      return api("getChat",{chat_id:к.ид}).then(function(ч){
+        if(!ч.ok){ к.статус="нет доступа"; к.тип="?"; к.назв=к.ид; к.ошибка=ч.description||""; return к }
+        var р=ч.result||{};
+        к.тип=р.type||"?";
+        к.назв=р.title||((р.first_name||"")+" "+(р.last_name||"")).trim()||р.username||к.ид;
+        if(к.тип==="channel"||к.тип==="supergroup"||к.тип==="group"){
+          return api("getChatMember",{chat_id:к.ид,user_id:к.я}).then(function(у){
+            к.статус=у.ok?(у.result.status||"?"):"нет данных"; return к;
+          });
+        }
+        к.статус="личный чат"; return к;
+      }).catch(function(e){ к.статус="ошибка"; к.ошибка=e.message; к.тип="?"; к.назв=к.ид; return к });
+    }));
+  }
+  function можно(к){
+    if(к.статус==="личный чат")return true;
+    return к.статус==="administrator"||к.статус==="creator";
+  }
+
+  function нарисовать2(список){
+    var э=$("ш-авто-каналы"); if(!э)return;
+    if(!список.length){ э.innerHTML='<div class="ш-к-п">ни чатов, ни каналов в этом браузере не нашлось.</div>'; return }
+    var html="", скрыто=0;
+    список.forEach(function(к){
+      if(!можно(к)){ скрыто++; return }
+      var ок=можно(к), наш=(String(к.ид)===String(КХ()));
+      html+='<div class="ш-чат">'+
+        '<div class="ш-чат-т"><div class="ш-чат-н">'+(к.тип==="private"?"💬 Чат с ботом":"📢 ")+экр(к.тип==="private"?"(старые фото здесь)":(к.назв||к.ид))+'</div>'+
+        '<div class="ш-чат-п">'+к.ид+' · '+(к.тип||"?")+' · нашёл в: '+экр((к.откуда||[]).join(", ").slice(0,55))+
+        (наш?" · это наш канал-хранилище":(к.ошибка?" · "+экр(к.ошибка):""))+'</div></div>'+
+        '<span class="ш-бейдж '+(ок?(к.тип==="private"?"ш-б-чат":"ш-б-ок"):"ш-б-нет")+'">'+
+          (к.тип==="private"?"личный чат — читается":(к.статус==="administrator"||к.статус==="creator"?"бот админ":экр(к.статус)))+'</span>'+
+        (ок&&!наш?('<button class="p" data-скан2="'+к.ид+'">тащить отсюда</button>'):'')+
+        '</div>';
+    });
+    if(скрыто)html+='<div class="ш-чат-п" style="padding:6px 2px">ещё '+скрыто+' id проверил — туда бот не имеет доступа, скрыл.</div>';
+    э.innerHTML=html;
+    э.querySelectorAll("[data-скан2]").forEach(function(б){
+      б.onclick=function(){ перенос(б.dataset.скан2, б, null) };
+    });
+  }
+
+  /* ---- 3. перенос: номер сообщения за номером, с продолжением и стопом после пустоты ---- */
+  var СТОП=false;
+  function перенос(ид, кнопка, поле, до){
+    var К=КХ();
+    if(!К){тост("сначала задан канал-хранилище",true);return}
+    СТОП=false;
+    var ключ="ш-скан-"+ид;
+    var с=parseInt(localStorage.getItem(ключ)||"1",10)||1;
+    if(до===undefined)до=parseInt(localStorage.getItem("ш-скан-до")||"600",10)||600;
+    var найдено=0, пусто=0, подрядПусто=0, i=с;
+    if(кнопка){кнопка.disabled=true;кнопка.textContent="тащу…"}
+    function сказать(т){
+      if(поле)поле.textContent=т;
+      var а=$("ш-авто-лог"); if(а&&!поле)а.textContent=т;
+      var п=$("ш-авто-полоса"); if(п)п.style.width=Math.min(100,Math.round((i-с)/Math.max(1,до-с)*100))+"%";
+    }
+    function конец(причина){
+      try{localStorage.setItem(ключ,String(i))}catch(e){}
+      сказать("готово: перенесено "+найдено+" файлов из «"+ид+"», просмотрено сообщений до "+i+" ("+причина+"). Файлы во вкладке «Файлы».");
+      тост("перенесено <b>"+найдено+"</b> файлов");
+      try{window.__ХР&&window.__ХР.нарисовать()}catch(e){}
+      if(кнопка){кнопка.disabled=false;кнопка.textContent="тащить отсюда"}
+    }
+    function шаг(){
+      if(СТОП){конец("остановлено");return}
+      if(i>до){
+        var уже=(window.__Ш86_ВСЕГО||0)+найдено;
+        window.__Ш86_ВСЕГО=уже;
+        if(найдено>0&&(window.__Ш86_ПАЧЕК||0)<10){
+          window.__Ш86_ПАЧЕК=(window.__Ш86_ПАЧЕК||0)+1;
+          сказать("пачка готова: перенесено "+уже+" файлов, продолжаю дальше — сообщение "+i+"…");
+          до=i+600;
+          setTimeout(шаг,1500); return;
+        }
+        конец("дошёл до "+до); return;
+      }
+      if(подрядПусто>=80){конец("80 пустых подряд — дальше файлов нет");return}
+      сказать("сообщение "+i+" · найдено файлов: "+найдено);
+      api("forwardMessage",{chat_id:К,from_chat_id:ид,message_id:i}).then(function(j){
+        if(j.ok){
+          подрядПусто=0;
+          var р=j.result||{}, д=р.document||р.video||р.audio||р.animation||р.voice||(р.photo&&р.photo[р.photo.length-1]);
+          if(д){
+            var имя=д.file_name||("фото "+new Date((р.date||0)*1000).toLocaleDateString("ru-RU"));
+            var рб=д.file_size||0;
+            try{
+              var А=window.ХРАНИЛИЩЕ||{};
+              if(А.запомнить)А.запомнить(имя+"|"+рб+"|"+(р.date||0),
+                {и:имя,р:рб,f:д.file_id||"",ч:1,д:р.date||0,о:"склад",т:д.mime_type||"",
+                 п:"Фото",мсг:р.message_id||0,чат:К});
+            }catch(e){}
+            найдено++;
+          }
+        } else {
+          подрядПусто++;
+          if(/not enough rights|have no rights|chat not found|message to forward not found/i.test(j.description||"")===false){}
+          if(/not enough rights|have no rights/i.test(j.description||"")){
+            сказать("Telegram не пускает: "+j.description); тост("нет прав",true); return;
+          }
+        }
+        i++; setTimeout(шаг,1150);
+      }).catch(function(){ подрядПусто++; i++; setTimeout(шаг,1300) });
+    }
+    шаг();
+  }
+  window.__Ш86_стоп=function(){СТОП=true};
+
+  /* ---- 4. авто: найти и начать с самого вероятного ---- */
+  function авто(){
+    if(!Т()){тост("сначала ключ бота (🔑)",true);return}
+    var б=$("ш-авто-старт"); if(б){б.disabled=true;б.textContent="ищу…"}
+    api("getMe").then(function(я){
+      var мой=(я.result&&я.result.id)||0;
+      return кандидаты2().then(function(сп){
+        лог("нашёл "+сп.length+" чатов и каналов — проверяю доступ…");
+        сп.forEach(function(к){к.я=мой});
+        return проверить2(сп).then(function(гот){
+          нарисовать2(гот);
+          var годные=гот.filter(function(к){return можно(к)&&String(к.ид)!==String(КХ())});
+          /* приоритет: личный чат с ботом, там и лежат фото с айфона */
+          годные.sort(function(a,b){
+            return (b.тип==="private"?1:0)-(a.тип==="private"?1:0);
+          });
+          var ит=$("ш-86-итог");
+          if(!годные.length){
+            if(ит)ит.innerHTML="<b style='color:#ffcf87'>Ни один чат не открылся.</b> Проверь ключ бота и что фото лежат в чате именно этого бота.";
+            тост("нечего тащить",true);
+          } else {
+            var цель=годные[0];
+            if(ит)ит.innerHTML="проверил "+гот.length+" · беру «"+экр(цель.назв||цель.ид)+"» ("+(цель.тип==="private"?"личный чат с ботом":"канал")+") — поехали.";
+            тост("тащу из <b>"+экр(цель.назв||цель.ид)+"</b>");
+            перенос(цель.ид, null, null, parseInt(localStorage.getItem("ш-скан-до")||"600",10)||600);
+          }
+          if(б){б.disabled=false;б.textContent="найти и перенести старые фото"}
+        });
+      });
+    }).catch(function(e){ лог("ошибка: "+e.message); тост("ошибка: "+e.message,true);
+      if(б){б.disabled=false;б.textContent="найти и перенести старые фото"} });
+  }
+
+  /* ---- 5. пояснение на экране + привязка кнопок ---- */
+  function пояснение(){
+    var стр=document.querySelector('[data-стр="старые"]'); if(!стр)return;
+    if(!$("ш-чат-подсказка")){
+      var к=document.createElement("div"); к.className="ш-карт"; к.id="ш-чат-подсказка";
+      к.innerHTML='<div class="ш-к-т">Где на самом деле лежат фото с айфона</div>'+
+        '<div class="ш-к-п">Старый сайт отправлял всё <b>в личный чат с ботом</b> (тот самый «флот память»), '+
+        'а не в канал. Поэтому поиск по каналам их и не видел — это была моя ошибка: я искал только каналы с id -100…, '+
+        'а чаты с ботом пропускал.<br><br>'+
+        'Теперь сайт проверяет и личные чаты, и каналы. Фото <b>никуда не денутся</b> из чата — '+
+        'в этом сайте появятся их копии со ссылками. Заново заливать ничего не нужно.</div>';
+      var авто=$("ш-авто-карт"), пути=$("ш-пути-карт");
+      var якорь=авто||пути;
+      if(якорь&&якорь.nextSibling)стр.insertBefore(к,якорь.nextSibling); else стр.insertBefore(к,стр.firstChild);
+    }
+    /* карточка «Два пути» больше не нужна: фото в чате бота, заливать заново нечего */
+    var п=$("ш-пути-карт"); if(п)п.style.display="none";
+    /* свой блок вывода: чужой вердикт пишет в скрытый узел и больше ничего не портит */
+    var и=$("ш-авто-итог2"); if(и)и.style.display="none";
+    if(!$("ш-86-итог")){
+      var н=document.createElement("div"); н.id="ш-86-итог";
+      н.style.cssText="font-size:13px;color:#cfe9df;margin-top:6px;line-height:1.5";
+      var карт=$("ш-авто-карт"); if(карт&&и&&и.parentNode===карт)карт.insertBefore(н,и); else if(карт)карт.appendChild(н);
+    }
+    /* перепривязываем кнопки на новую логику */
+    var б=$("ш-авто-старт");
+    if(б&&б.__ш86!==2){ б.__ш86=2; б.onclick=авто; }
+    var с=$("ш-авто-стоп");
+    if(с&&с.__ш86!==2){ с.__ш86=2; с.onclick=function(){window.__Ш86_стоп();тост("останавливаю…")} }
+    var н=$("ш-путь-найти");
+    if(н&&!н.__ш86){ н.__ш86=1; н.onclick=function(){
+      var п2=$("ш-путь-поиск"); if(п2)п2.textContent="ищу чат по пересылке…";
+      api("getUpdates",{limit:30,timeout:0}).then(function(j){
+        var найд=null;
+        (j.result||[]).forEach(function(об){
+          var м=об.message||об.channel_post||об.edited_message; if(!м)return;
+          var от=(м.forward_origin&&м.forward_origin.chat)||м.forward_from_chat;
+          if(от&&от.id)найд={ид:от.id,назв:от.title||от.username||String(от.id)};
+        });
+        if(!найд){ if(п2)п2.textContent="пересылки не вижу — перешли сообщение боту в личку и нажми снова."; тост("пересылки нет",true); return }
+        if(п2)п2.textContent="нашёл «"+найд.назв+"» — тащу…";
+        перенос(найд.ид, null, п2, 600);
+      }).catch(function(e){ if(п2)п2.textContent="ошибка: "+e.message });
+    } }
+  }
+  /* делегированный клик: работает даже если кнопку перерисовали */
+  document.addEventListener("click",function(e){
+    if(e.target.closest("#ш-авто-старт")){ e.preventDefault(); e.stopPropagation(); авто(); return }
+    if(e.target.closest("#ш-авто-стоп")){ e.preventDefault(); e.stopPropagation(); window.__Ш86_стоп(); тост("останавливаю…"); return }
+  },true);
+  setInterval(пояснение,900);
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",function(){setTimeout(пояснение,900)});
+  else setTimeout(пояснение,900);
+  window.ш_авто86={кандидаты:кандидаты2, проверить:проверить2, перенос:перенос, авто:авто};
 })();
 </script>
 
