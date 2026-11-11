@@ -78,8 +78,9 @@ pre{margin:6px 0 0;white-space:pre-wrap;word-break:break-word;color:#b8c6d8;font
 var ВСТРОЕНО = window.__ДАННЫЕ__ || null;
 var ДАННЫЕ = null, СТРАНИЦА = 0, ПО_СТРАНИЦЕ = 20;
 var ИСТОЧНИКИ = [
-  "actions.json?t=",                                                       /* живая панель в Arena */
-  "https://raw.githubusercontent.com/Ayt1741/hranilishe/main/actions.json?t=" /* сайт: без 10-минутного кэша */
+  function(t){return "actions.json?t="+t},                                                     /* живая панель в Arena — без кэша вообще */
+  function(t){return "https://api.github.com/repos/Ayt1741/hranilishe/contents/actions.json?t="+t}, /* API: всегда свежий */
+  function(t){return "https://raw.githubusercontent.com/Ayt1741/hranilishe/main/actions.json?t="+t} /* запасной */
 ];
 function esc(t){return String(t==null?"":t).replace(/[<>&]/g,function(c){return {"<":"&lt;",">":"&gt;","&":"&amp;"}[c]})}
 function зн(v){return v?'<span style="color:#5ee6a0">✓</span>':'<span style="color:#ff7d7d">✗</span>'}
@@ -171,13 +172,25 @@ function тян(i){
     else {document.getElementById("т").style.background="#ff7d7d";document.getElementById("жт").textContent="нет данных";}
     return;
   }
-  fetch(ИСТОЧНИКИ[к]+Date.now(),{cache:"no-store"}).then(function(r){
+  var адрес=ИСТОЧНИКИ[к](Date.now());
+  fetch(адрес,{cache:"no-store"}).then(function(r){
     if(!r.ok)throw new Error("код "+r.status); return r.json();
-  }).then(function(д){
+  }).then(function(сырое){
+    var д=сырое;
+    if(сырое && сырое.content && сырое.encoding){            /* ответ GitHub API в base64 */
+      var б=atob(сырое.content.replace(/\s/g,""));
+      var байты=new Uint8Array(б.length);
+      for(var i=0;i<б.length;i++)байты[i]=б.charCodeAt(i);
+      д=JSON.parse(new TextDecoder("utf-8").decode(байты));
+    }
     if(!д || !д.действия || !д.действия.length)throw new Error("пусто");
     рисовать(д);
     document.getElementById("т").style.background="#5ee6a0";
-    document.getElementById("жт").textContent=(к===0?"живая панель":"сайт (без кэша)");
+    document.getElementById("жт").textContent=(к===0?"живая панель":(к===1?"сайт · свежие данные":"сайт · запасной источник"));
+    var возраст=Math.max(0,Math.round((Date.now()-new Date(п.опубликовано||Date.now()).getTime())/1000));
+    var ов=document.getElementById("обн");
+    ов.textContent="данные от "+String(п.опубликовано||"").replace("T"," ")+" · возраст "+возраст+" с";
+    ов.style.color=возраст>180?"#ff7d7d":(возраст>60?"#ffcf6b":"#5ee6a0");
   }).catch(function(){ тян(к+1); });
 }
 
@@ -191,6 +204,6 @@ document.addEventListener("visibilitychange",function(){if(!document.hidden)тя
 
 чатТян();
 тян(0);
-setInterval(function(){тян(0)},5000);
+setInterval(function(){тян(0)},90000);
 setInterval(чатТян,3000);
 </script></body></html>
