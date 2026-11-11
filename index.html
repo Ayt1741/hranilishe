@@ -4865,7 +4865,7 @@ header,footer#подвал-главный{display:none!important}
 
 <div id="ш">
   <div id="ш-верх">
-    <div id="ш-лого"><span id="ш-знак">Х</span><span>ХРАНИЛИЩЕ</span><b id="ш-вер">v8.8</b></div>
+    <div id="ш-лого"><span id="ш-знак">Х</span><span>ХРАНИЛИЩЕ</span><b id="ш-вер">v9.0</b></div>
     <div id="ш-нав">
       <button class="ш-п on" data-п="файлы">📁 Файлы</button>
       <button class="ш-п" data-п="папки">🗂 Папки</button>
@@ -6845,6 +6845,296 @@ button:focus-visible{outline:2px solid #7fb2ff;outline-offset:2px}
   else setTimeout(старт,1500);
   setInterval(function(){ куда(); метки(); },2500);
   window.ш_88={слить:слитьМусорные, очередь:починитьОчередь};
+})();
+</script>
+
+<style id="ш-стиль-89">
+#ш-89{background:#0f1d16;border:1px solid #2f6b4f;border-radius:13px;padding:14px;margin-bottom:12px}
+#ш-89-т{font-size:15px;font-weight:700;color:#cfe9df;margin-bottom:8px}
+.ш-89-цифры{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.ш-89-ц{flex:1 1 130px;background:#0b0e13;border:1px solid #24303f;border-radius:10px;padding:9px 11px}
+.ш-89-ц b{display:block;font-size:20px;color:#8fe3bd;line-height:1.2}
+.ш-89-ц span{font-size:11.5px;color:#8b97a8}
+.ш-89-кн{display:flex;gap:8px;flex-wrap:wrap}
+.ш-89-лог{font-size:12px;color:#b8c6d8;margin-top:10px;font-family:ui-monospace,Menlo,monospace;white-space:pre-wrap}
+</style>
+<script>
+/* ===== v8.9: отчёт о переносе цифрами — сколько проверено, сколько найдено, продолжать до конца ===== */
+(function(){
+  if(window.__Ш89)return; window.__Ш89=1;
+  function $(и){return document.getElementById(и)}
+  function экр(т){return String(т==null?"":t=>0)}
+  function esc(т){return String(т==null?"":т).replace(/[<>&]/g,function(c){return{"<":"&lt;",">":"&gt;","&":"&amp;"}[c]})}
+  function тост(т,зл){ if(window.ш_тост)window.ш_тост(т,зл) }
+  var ГЛАВНЫЙ="7023156818";
+
+  function рекорды(){ try{return JSON.parse(localStorage.getItem("залито")||"{}")}catch(e){return {}} }
+  function вФото(){
+    var з=рекорды(), n=0, об=0;
+    Object.keys(з).forEach(function(к){
+      var ф=з[к]||{};
+      if(ф.п==="Фото"){n++; об+=(ф.р||0)}
+    });
+    return {n:n, об:об};
+  }
+  function проверено(){ return parseInt(localStorage.getItem("ш-скан-"+ГЛАВНЫЙ)||"0",10)||0 }
+
+  function карт(){
+    var стр=document.querySelector('[data-стр="старые"]'); if(!стр)return;
+    if($("ш-89"))return;
+    var д=document.createElement("div"); д.id="ш-89";
+    д.innerHTML=
+      '<div id="ш-89-т">Отчёт о переносе старых фото</div>'+
+      '<div class="ш-89-цифры">'+
+        '<div class="ш-89-ц"><b id="ш-89-фото">0</b><span>файлов в папке «Фото»</span></div>'+
+        '<div class="ш-89-ц"><b id="ш-89-сооб">0</b><span>сообщений проверено в чате</span></div>'+
+        '<div class="ш-89-ц"><b id="ш-89-об">0</b><span>объём этих файлов</span></div>'+
+      '</div>'+
+      '<div class="ш-89-кн">'+
+        '<button class="p" id="ш-89-дальше">продолжить с сообщения <span id="ш-89-с">1</span></button>'+
+        '<button id="ш-89-до-конца">проверить до конца</button>'+
+        '<button id="ш-89-в-фото">открыть папку «Фото»</button>'+
+      '</div>'+
+      '<div class="ш-89-лог" id="ш-89-лог">цифры обновляются сами, пока идёт перенос.</div>';
+    стр.insertBefore(д,стр.firstChild);
+    $("ш-89-дальше").onclick=function(){ пуск(проверено()||1, "продолжаю") };
+    $("ш-89-до-конца").onclick=function(){ пуск(проверено()||1, "до конца") };
+    $("ш-89-в-фото").onclick=function(){
+      try{window.__ХР.поставить({активПапка:"Фото"});window.__ХР.нарисовать();
+        window.обновитьКрошки&&window.обновитьКрошки(); window.ш_показать&&window.ш_показать("файлы")}catch(e){}
+    };
+  }
+  function обновить(){
+    var ф=вФото();
+    if($("ш-89-фото"))$("ш-89-фото").textContent=ф.n;
+    if($("ш-89-сооб"))$("ш-89-сооб").textContent=проверено();
+    if($("ш-89-об"))$("ш-89-об").textContent=(ф.об/1048576).toFixed(1)+" МБ";
+    if($("ш-89-с"))$("ш-89-с").textContent=проверено()||1;
+  }
+  function пуск(с, режим){
+    var ит=$("ш-86-итог"), лог=$("ш-89-лог");
+    if(!localStorage.getItem("канал-хранилище")){тост("нет канала-хранилища",true);return}
+    var до=(режим==="до конца")?999999:(parseInt(localStorage.getItem("ш-скан-до")||"600",10)||600);
+    if(режим==="до конца"){localStorage.setItem("ш-скан-до","999999")}
+    else{localStorage.setItem("ш-скан-до",String(до))}
+    if(log)лог.textContent="поехал с сообщения "+с+"…";
+    if(window.ш_авто86&&window.ш_авто86.перенос){
+      window.ш_авто86.перенос(ГЛАВНЫЙ,null,null,до);
+    } else if(window.ш_авто87){ window.ш_авто87(); }
+    if(ит)ит.innerHTML="".concat("иду по чату с сообщения ",с," — счётчики выше обновляются сами.");
+  }
+
+  function старт(){ карт(); обновить(); }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",function(){setTimeout(старт,1200)});
+  else setTimeout(старт,1200);
+  setInterval(function(){ if(!$("ш-89"))карт(); обновить(); },2000);
+})();
+</script>
+
+<style id="ш-стиль-90">
+#ш-90{background:#101c2b;border:1px solid #2b4a7a;border-radius:13px;padding:13px;margin-bottom:12px}
+#ш-90-т{font-size:15px;font-weight:700;color:#cfe3ff;margin-bottom:6px}
+#ш-90-ц{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0}
+#ш-90-ц div{flex:1 1 120px;background:#0b0e13;border:1px solid #24303f;border-radius:9px;padding:8px 10px}
+#ш-90-ц b{display:block;font-size:19px;color:#9fc6ff}
+#ш-90-ц span{font-size:11px;color:#8b97a8}
+#ш-90-лог{font-size:12px;color:#b8c6d8;font-family:ui-monospace,Menlo,monospace;white-space:pre-wrap;margin-top:8px}
+</style>
+<script>
+/* ===== v9.0: переносим СПИСОК 996 фото из базы старого сайта (tgdrive) в новый сайт — без Telegram ===== */
+(function(){
+  if(window.__Ш90)return; window.__Ш90=1;
+  function $(и){return document.getElementById(и)}
+  function esc(т){return String(т==null?"":т).replace(/[<>&]/g,function(c){return{"<":"&lt;",">":"&gt;","&":"&amp;"}[c]})}
+  function тост(т,зл){ if(window.ш_тост)window.ш_тост(т,зл) }
+  function ХР(){return window.__ХР||null}
+
+  function лог(т){ var э=$("ш-90-лог"); if(э)э.textContent=т }
+
+  /* ---- читаем базу старого сайта ---- */
+  function открыть(имя){
+    return new Promise(function(да,нет){
+      var з; try{ з=indexedDB.open(имя) }catch(e){ нет(e); return }
+      з.onerror=function(){ нет(з.error||new Error("не открылась")) };
+      з.onblocked=function(){ нет(new Error("база занята другой вкладкой")) };
+      з.onsuccess=function(){ да(з.result) };
+    });
+  }
+  function всё(db,имя){
+    return new Promise(function(да){
+      if(!db.objectStoreNames.contains(имя))return да([]);
+      try{
+        var к=db.transaction(имя,"readonly").objectStore(имя).openCursor(), out=[];
+        к.onsuccess=function(e){ var р=e.target.result; if(р){out.push(р.value);р.continue()} else да(out) };
+        к.onerror=function(){ да(out) };
+      }catch(e){ да([]) }
+    });
+  }
+
+  /* ---- превращаем запись старого сайта в запись нового ---- */
+  function вНовую(ф, именаПапок){
+    var д=ф.date||0; if(д>1e11)д=Math.floor(д/1000);            /* старое хранило миллисекунды */
+    var папка=именаПапок[String(ф.folderId||"")]||"Фото";
+    var мсгИды=[];
+    if(ф.messageIds && ф.messageIds.length)мсгИды=ф.messageIds.slice();
+    else if(ф.messageId)мсгИды=[ф.messageId];
+    return {
+      и: ф.name||("файл "+мсгИды[0]),
+      р: ф.size||0,
+      f: "",                       /* file_id не хранился — получим при скачивании */
+      ч: мсгИды.length||1,
+      д: д,
+      о: "склад",
+      т: ф.mimeType||"",
+      п: папка,
+      мсг: мсгИды[0]||0,
+      чат: String(ф.folderId||""),
+      мсгиды: мсгИды,
+      изСтарого: 1
+    };
+  }
+
+  function импорт(){
+    return открыть("tgdrive").then(function(db){
+      return Promise.all([всё(db,"files"),всё(db,"folders")]).then(function(р){
+        var файлы=р[0]||[], папки=р[1]||[];
+        try{db.close()}catch(e){}
+        if(!файлы.length){
+          лог("в базе старого сайта (tgdrive) записей нет — переносить нечего.");
+          return {было:0, добавлено:0, всего:0};
+        }
+        var имена={};
+        папки.forEach(function(п){ имена[String(п.id)]=п.title||("папка "+п.id) });
+        var з={}; try{з=JSON.parse(localStorage.getItem("залито")||"{}")}catch(e){з={}}
+        var естьИмена={};
+        Object.keys(з).forEach(function(к){ var ф=з[к]||{}; естьИмена[(ф.и||"")+"|"+(ф.р||0)]=1 });
+        var добавлено=0, Х=window.ХРАНИЛИЩЕ||{};
+        файлы.forEach(function(ф){
+          var н=вНовую(ф,имена);
+          var метка=н.и+"|"+н.р;
+          if(естьИмена[метка])return;
+          естьИмена[метка]=1;
+          var ключ=н.и+"|"+н.р+"|0";
+          з[ключ]=н; добавлено++;
+          if(н.п){
+            try{
+              var сп=JSON.parse(localStorage.getItem("папки")||"[]");
+              if(сп.indexOf(н.п)<0){сп.push(н.п);localStorage.setItem("папки",JSON.stringify(сп))}
+            }catch(e){}
+          }
+        });
+        try{localStorage.setItem("залито",JSON.stringify(з))}catch(e){ лог("память браузера переполнена — часть записей не влезла"); }
+        /* сказали движку перечитать */
+        try{ if(Х.восстановить)Х.восстановить(); }catch(e){}
+        try{ if(Х.перерисоватьПапки)Х.перерисоватьПапки(); }catch(e){}
+        try{ ХР()&&ХР().нарисовать(); }catch(e){}
+        try{ window.обновитьКрошки&&window.обновитьКрошки(); }catch(e){}
+        return {было:файлы.length, добавлено:добавлено, всего:Object.keys(з).length};
+      });
+    }).catch(function(e){
+      лог("база старого сайта не открылась: "+(e.message||e));
+      return {было:0, добавлено:0, всего:0, ошибка:e.message||String(e)};
+    });
+  }
+
+  /* ---- карточка с цифрами ---- */
+  function карт(){
+    var стр=document.querySelector('[data-стр="старые"]'); if(!стр||$("ш-90"))return;
+    var д=document.createElement("div"); д.id="ш-90";
+    д.innerHTML=
+      '<div id="ш-90-т">Перенос списка из базы старого сайта</div>'+
+      '<div style="font-size:12.5px;color:#8b97a8">Старый сайт хранит оглавление всех файлов в базе браузера <b>tgdrive</b>. '+
+      'Переношу его в новый сайт целиком: имена, размеры, даты, папки. Telegram для этого не нужен.</div>'+
+      '<div id="ш-90-ц">'+
+        '<div><b id="ш-90-было">…</b><span>файлов в базе старого сайта</span></div>'+
+        '<div><b id="ш-90-добав">0</b><span>добавлено в новый</span></div>'+
+        '<div><b id="ш-90-всего">0</b><span>всего в новом сейчас</span></div>'+
+      '</div>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+        '<button class="p" id="ш-90-кн">перенести ещё раз</button>'+
+        '<button id="ш-90-файлы">открыть «Файлы»</button>'+
+      '</div>'+
+      '<div id="ш-90-лог">смотрю базу старого сайта…</div>';
+    стр.insertBefore(д,стр.firstChild);
+    $("ш-90-кн").onclick=function(){ проход(true) };
+    $("ш-90-файлы").onclick=function(){
+      try{ХР().поставить({активПапка:"Фото"});ХР().нарисовать();
+        window.обновитьКрошки&&window.обновитьКрошки();window.ш_показать&&window.ш_показать("файлы")}catch(e){}
+    };
+  }
+  function цифры(р){
+    if(!р)return;
+    if($("ш-90-было"))$("ш-90-было").textContent=р.было;
+    if($("ш-90-добав"))$("ш-90-добав").textContent=р.добавлено;
+    if($("ш-90-всего"))$("ш-90-всего").textContent=р.всего;
+  }
+  function проход(вручную){
+    return импорт().then(function(р){
+      цифры(р);
+      if(р.было){
+        лог("в базе старого сайта: "+р.было+" файлов · добавлено в новый: "+р.добавлено+" · теперь в новом: "+р.всего+
+          (р.добавлено?"\nГотово. Открой «Файлы» — они уже в папке «Фото».":"\nНовых записей нет — всё уже перенесено раньше."));
+        if(р.добавлено||вручную)тост("из старой базы перенесено <b>"+р.добавлено+"</b> файлов, всего в новом: "+р.всего);
+      }
+      return р;
+    });
+  }
+
+  /* ---- скачивание файлов старого сайта: получаем file_id по номеру сообщения ---- */
+  function получитьИД(ф){
+    var Т="";try{Т=localStorage.getItem("токен-бота")||""}catch(e){}
+    var К="";try{К=localStorage.getItem("канал-хранилище")||""}catch(e){}
+    if(!Т)return Promise.reject(new Error("нужен ключ бота"));
+    var откуда=ф.чат||К;
+    if(!откуда)return Promise.reject(new Error("не знаю, из какого чата брать"));
+    var мсги=(ф.мсгиды&&ф.мсгиды.length)?ф.мсгиды:[ф.мсг];
+    var цепочка=Promise.resolve(null);
+    мсги.forEach(function(м){
+      цепочка=цепочка.then(function(ид){
+        if(ид)return ид;
+        return fetch("https://api.telegram.org/bot"+Т+"/forwardMessage",{method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({chat_id:К,from_chat_id:откуда,message_id:м})})
+          .then(function(r){return r.json()})
+          .then(function(j){
+            if(!j.ok)return null;
+            var р=j.result||{}, д=р.document||р.video||р.audio||р.animation||(р.photo&&р.photo[р.photo.length-1]);
+            return д&&д.file_id?д.file_id:null;
+          });
+      });
+    });
+    return цепочка.then(function(ид){
+      if(!ид)throw new Error("Telegram не отдал файл (бот должен быть в чате/канале)");
+      ф.f=ид;
+      try{
+        var з=JSON.parse(localStorage.getItem("залито")||"{}");
+        Object.keys(з).forEach(function(к){ if(з[к]&&з[к].и===ф.и&&Math.abs((з[к].р||0)-(ф.р||0))<2)з[к].f=ид });
+        localStorage.setItem("залито",JSON.stringify(з));
+      }catch(e){}
+      return ид;
+    });
+  }
+  /* перехват «Скачать» у файлов без file_id */
+  document.addEventListener("click",function(e){
+    var к=e.target.closest("#список [data-с]"); if(!к)return;
+    if(к.__ш90)return;
+    var и=+к.dataset.с, ф=null;
+    try{ ф=(ХР().взять().ВСЕ||[])[и] }catch(err){}
+    if(!ф||ф.f||!ф.мсг)return;
+    e.preventDefault(); e.stopPropagation();
+    к.textContent="получаю…";
+    получитьИД(ф).then(function(){
+      к.textContent="Скачать"; к.__ш90=1; к.click(); к.__ш90=0;
+    }).catch(function(err){
+      к.textContent="Скачать";
+      тост("не вышло: "+err.message,true);
+    });
+  },true);
+
+  function старт(){ карт(); проход(false); }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",function(){setTimeout(старт,2000)});
+  else setTimeout(старт,2000);
+  window.ш_импорт90=function(){return проход(true)};
 })();
 </script>
 
