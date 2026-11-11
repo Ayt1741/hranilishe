@@ -76,7 +76,7 @@ pre{margin:6px 0 0;white-space:pre-wrap;word-break:break-word;color:#b8c6d8;font
 </div>
 <script>
 var ВСТРОЕНО = window.__ДАННЫЕ__ || null;
-var ДАННЫЕ = null, СТРАНИЦА = 0, ПО_СТРАНИЦЕ = 20;
+var ДАННЫЕ = null, СТРАНИЦА = 0, ПО_СТРАНИЦЕ = 20, ЕСТЬ = false;
 var ИСТОЧНИКИ = [
   function(t){return "actions.json?t="+t},                                                     /* живая панель в Arena — без кэша вообще */
   function(t){return "https://api.github.com/repos/Ayt1741/hranilishe/contents/actions.json?t="+t}, /* API: всегда свежий */
@@ -166,7 +166,9 @@ function чатШлю(){
 function тян(i){
   var к=(i===undefined?0:i);
   if(к>=ИСТОЧНИКИ.length){
-    if(ВСТРОЕНО){рисовать(ВСТРОЕНО);
+    if(ЕСТЬ){document.getElementById("т").style.background="#ffcf6b";
+      document.getElementById("жт").textContent="нет связи — показаны прошлые данные";return}
+    if(ВСТРОЕНО){рисовать(ВСТРОЕНО);ЕСТЬ=true;
       document.getElementById("жт").textContent="офлайн: данные из файла";
       document.getElementById("т").style.background="#ffcf6b";}
     else {document.getElementById("т").style.background="#ff7d7d";document.getElementById("жт").textContent="нет данных";}
@@ -186,6 +188,7 @@ function тян(i){
     if(!д || !д.действия || !д.действия.length)throw new Error("пусто");
     рисовать(д);
     document.getElementById("т").style.background="#5ee6a0";
+    ЕСТЬ=true;
     document.getElementById("жт").textContent=(к===0?"живая панель":(к===1?"сайт · свежие данные":"сайт · запасной источник"));
     var возраст=Math.max(0,Math.round((Date.now()-new Date(п.опубликовано||Date.now()).getTime())/1000));
     var ов=document.getElementById("обн");
