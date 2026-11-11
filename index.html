@@ -4865,7 +4865,7 @@ header,footer#подвал-главный{display:none!important}
 
 <div id="ш">
   <div id="ш-верх">
-    <div id="ш-лого"><span id="ш-знак">Х</span><span>ХРАНИЛИЩЕ</span><b id="ш-вер">v8.6</b></div>
+    <div id="ш-лого"><span id="ш-знак">Х</span><span>ХРАНИЛИЩЕ</span><b id="ш-вер">v8.7</b></div>
     <div id="ш-нав">
       <button class="ш-п on" data-п="файлы">📁 Файлы</button>
       <button class="ш-п" data-п="папки">🗂 Папки</button>
@@ -6589,6 +6589,113 @@ button:focus-visible{outline:2px solid #7fb2ff;outline-offset:2px}
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",function(){setTimeout(пояснение,900)});
   else setTimeout(пояснение,900);
   window.ш_авто86={кандидаты:кандидаты2, проверить:проверить2, перенос:перенос, авто:авто};
+})();
+</script>
+
+<style id="ш-стиль-87">
+#ш-87-шапка{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+#ш-87-бот{font-size:13px;color:#cfe9df;background:#12241c;border:1px solid #2f6b4f;border-radius:9px;padding:6px 10px}
+#ш-87-бот b{color:#8fe3bd}
+.ш-чат.главный{border-color:#2f6b4f;background:#0f1d16}
+.ш-б-глав{background:#204a37;color:#9ff0c6;border:1px solid #3d7f5d}
+#ш-87-скрытые{font-size:11.5px;color:#8b97a8;margin-top:8px;cursor:pointer;text-decoration:underline}
+</style>
+<script>
+/* ===== v8.7: показываем ИМЯ бота и оставляем только тот чат, что из старого сайта ===== */
+(function(){
+  if(window.__Ш87)return; window.__Ш87=1;
+  function $(и){return document.getElementById(и)}
+  function экр(т){return String(т==null?"":т).replace(/[<>&]/g,function(c){return{"<":"&lt;",">":"&gt;","&":"&amp;"}[c]})}
+  function Т(){try{return localStorage.getItem("токен-бота")||""}catch(e){return ""}}
+  function api(м,т){
+    var к=Т(); if(!к)return Promise.reject(new Error("нет ключа"));
+    return fetch("https://api.telegram.org/bot"+к+"/"+м,{method:"POST",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify(т||{})}).then(function(r){return r.json()});
+  }
+  var ГЛАВНЫЙ="7023156818";     /* id из кода старого сайта: ЧАТ="7023156818" */
+
+  /* --- 1. шапка с именем бота --- */
+  function шапка(){
+    var карт=$("ш-авто-карт"); if(!карт||$("ш-87-шапка"))return;
+    var д=document.createElement("div"); д.id="ш-87-шапка";
+    д.innerHTML='<div id="ш-87-бот">🤖 бот: <b>…</b></div>'+
+      '<div style="font-size:12px;color:#8b97a8">это тот самый бот «флот память»? имя выше — сравни с названием в Telegram</div>';
+    карт.insertBefore(д,карт.firstChild);
+    api("getMe").then(function(я){
+      var э=$("ш-87-бот");
+      if(!э)return;
+      if(!я.ok){э.innerHTML="🤖 ключ не принят: "+экр(я.description||"");return}
+      var б=я.result||{};
+      э.innerHTML="🤖 бот: <b>@"+экр(б.username||"?")+"</b> · имя «"+экр(б.first_name||"")+"» · id "+б.id;
+    }).catch(function(){var э=$("ш-87-бот");if(э)э.innerHTML="🤖 ключ бота не вставлен"});
+  }
+
+  /* --- 2. переписать список: главный чат первым и заметным, лишние личные — под спойлер --- */
+  function переписать(){
+    var кон=$("ш-авто-каналы"); if(!кон)return;
+    var строки=Array.prototype.slice.call(кон.querySelectorAll(".ш-чат"));
+    if(!строки.length)return;
+    var главная=null, личные=[], прочие=[];
+    строки.forEach(function(с){
+      var п=(с.querySelector(".ш-чат-п")||{}).textContent||"";
+      var ид=(п.split(" · ")[0]||"").trim();
+      if(ид===ГЛАВНЫЙ){главная=с;с.classList.add("главный");return}
+      if(/· private ·/.test(п)){личные.push(с);return}
+      прочие.push(с);
+    });
+    if(главная){
+      var б=главная.querySelector(".ш-бейдж");
+      if(б){б.className="ш-бейдж ш-б-глав";б.textContent="⭐ тот самый чат из старого сайта"}
+      var н=главная.querySelector(".ш-чат-н");
+      if(н)н.textContent="💬 Чат с ботом «флот память» — старые фото здесь";
+      кон.insertBefore(главная,кон.firstChild);
+    }
+    /* лишние личные чаты — убрать под спойлер */
+    личные.forEach(function(с){с.style.display="none"});
+    var старый=$("ш-87-скрытые"); if(старый)старый.remove();
+    if(личные.length){
+      var п=document.createElement("div"); п.id="ш-87-скрытые";
+      п.textContent="показать ещё "+личные.length+" личных чатов (не из старого сайта)";
+      п.onclick=function(){
+        var скрыты=личные[0].style.display==="none";
+        личные.forEach(function(с){с.style.display=скрыты?"flex":"none"});
+        п.textContent=скрыты?("скрыть "+личные.length+" лишних чатов"):("показать ещё "+личные.length+" личных чатов (не из старого сайта)");
+      };
+      кон.appendChild(п);
+    }
+    /* подпись «ещё N проверил» — по-человечески */
+    var подп=кон.querySelector(".ш-чат-п[style]");
+    if(подп&&/ещё \d+ id проверил/.test(подп.textContent||"")){
+      подп.textContent=(подп.textContent||"").replace(/ещё (\d+) id проверил — туда бот не имеет доступа, скрыл\./,
+        "ещё $1 служебных id (настройки сайта, старые токены) — доступа нет, скрыл, на перенос не влияют.");
+    }
+  }
+  setInterval(function(){ шапка(); переписать(); }, 1200);
+
+  /* --- 3. авто-режим: всегда начинать с главного чата --- */
+  function подменитьАвто(){
+    var б=$("ш-авто-старт"); if(!б)return;
+    if(б.__ш87)return; б.__ш87=1;
+    var старый=б.onclick;
+    б.onclick=null;
+    document.addEventListener("click",function(e){
+      if(!e.target.closest("#ш-авто-старт"))return;
+      if(window.ш_авто87)window.ш_авто87();
+    },true);
+  }
+  window.ш_авто87=function(){
+    if(!Т()){ if(window.ш_тост)window.ш_тост("сначала вставь ключ бота",true); return }
+    var ит=$("ш-86-итог");
+    if(ит)ит.innerHTML="беру чат из старого сайта (id "+ГЛАВНЫЙ+") и тащу оттуда…";
+    try{
+      if(window.ш_авто86&&window.ш_авто86.перенос){
+        window.ш_авто86.перенос(ГЛАВНЫЙ,null,null,parseInt(localStorage.getItem("ш-скан-до")||"600",10)||600);
+        if(window.ш_тост)window.ш_тост("тащу из чата «флот память»");
+      }
+    }catch(e){ if(ит)ит.textContent="ошибка запуска: "+e.message }
+  };
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",function(){setTimeout(function(){шапка();переписать();подменитьАвто()},1000)});
+  else setTimeout(function(){шапка();переписать();подменитьАвто()},1000);
 })();
 </script>
 
