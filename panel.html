@@ -163,50 +163,80 @@ function чатШлю(){
     .catch(function(){document.getElementById("чатсост").textContent="не отправилось: нет связи с панелью"});
 }
 
-function тян(i){
-  var к=(i===undefined?0:i);
-  if(к>=ИСТОЧНИКИ.length){
+var ЛУЧШЕЕ = null, ЛУЧШИЙ_ИСТ = -1, ЛУЧШИЙ_ВОЗРАСТ = 1e12;
+
+function возраст(д){
+  try{ return Math.max(0, Math.round((Date.now() - new Date(д.проверка.опубликовано).getTime())/1000)); }
+  catch(e){ return 1e12; }
+}
+
+function взять(к, готово){
+  var адрес = ИСТОЧНИКИ[к](Date.now());
+  fetch(адрес,{cache:"no-store"}).then(function(r){
+    if(!r.ok) throw new Error("код "+r.status);
+    return r.json();
+  }).then(function(сырое){
+    var д = сырое;
+    if(сырое && сырое.content && сырое.encoding){
+      var б = atob(сырое.content.replace(/\s/g,""));
+      var байты = new Uint8Array(б.length);
+      for(var i=0;i<б.length;i++) байты[i]=б.charCodeAt(i);
+      д = JSON.parse(new TextDecoder("utf-8").decode(байты));
+    }
+    if(!д || !д.действия || !д.действия.length) throw new Error("пусто");
+    готово(null, д, к);
+  }).catch(function(e){ готово(e, null, к); });
+}
+
+function тян(){
+  ЛУЧШЕЕ = null; ЛУЧШИЙ_ИСТ = -1; ЛУЧШИЙ_ВОЗРАСТ = 1e12;
+  var ждём = ИСТОЧНИКИ.length, готово_всех = 0, закончили = false;
+
+  function итог(){
+    if(закончили) return;
+    закончили = true;
+    if(ЛУЧШЕЕ){
+      ЕСТЬ = true;
+      рисовать(ЛУЧШЕЕ);
+      document.getElementById("т").style.background = "5ee6a0";
+      document.getElementById("т").style.background = "#5ee6a0";
+      document.getElementById("жт").textContent = (ЛУЧШИЙ_ИСТ===0?"живая панель":(ЛУЧШИЙ_ИСТ===1?"сайт · данные GitHub API":"сайт · запасной источник"));
+      var ов = document.getElementById("обн");
+      ов.textContent = "данные от "+String(ЛУЧШЕЕ.проверка.опубликовано||"").replace("T"," ")+" · возраст "+ЛУЧШИЙ_ВОЗРАСТ+" с";
+      ов.style.color = ЛУЧШИЙ_ВОЗРАСТ>180?"#ff7d7d":(ЛУЧШИЙ_ВОЗРАСТ>70?"#ffcf6b":"#5ee6a0");
+      return;
+    }
     if(ЕСТЬ){document.getElementById("т").style.background="#ffcf6b";
       document.getElementById("жт").textContent="нет связи — показаны прошлые данные";return}
     if(ВСТРОЕНО){рисовать(ВСТРОЕНО);ЕСТЬ=true;
       document.getElementById("жт").textContent="офлайн: данные из файла";
       document.getElementById("т").style.background="#ffcf6b";}
     else {document.getElementById("т").style.background="#ff7d7d";document.getElementById("жт").textContent="нет данных";}
-    return;
   }
-  var адрес=ИСТОЧНИКИ[к](Date.now());
-  fetch(адрес,{cache:"no-store"}).then(function(r){
-    if(!r.ok)throw new Error("код "+r.status); return r.json();
-  }).then(function(сырое){
-    var д=сырое;
-    if(сырое && сырое.content && сырое.encoding){            /* ответ GitHub API в base64 */
-      var б=atob(сырое.content.replace(/\s/g,""));
-      var байты=new Uint8Array(б.length);
-      for(var i=0;i<б.length;i++)байты[i]=б.charCodeAt(i);
-      д=JSON.parse(new TextDecoder("utf-8").decode(байты));
-    }
-    if(!д || !д.действия || !д.действия.length)throw new Error("пусто");
-    рисовать(д);
-    document.getElementById("т").style.background="#5ee6a0";
-    ЕСТЬ=true;
-    document.getElementById("жт").textContent=(к===0?"живая панель":(к===1?"сайт · свежие данные":"сайт · запасной источник"));
-    var возраст=Math.max(0,Math.round((Date.now()-new Date(п.опубликовано||Date.now()).getTime())/1000));
-    var ов=document.getElementById("обн");
-    ов.textContent="данные от "+String(п.опубликовано||"").replace("T"," ")+" · возраст "+возраст+" с";
-    ов.style.color=возраст>180?"#ff7d7d":(возраст>60?"#ffcf6b":"#5ee6a0");
-  }).catch(function(){ тян(к+1); });
+
+  ИСТОЧНИКИ.forEach(function(_, к){
+    взять(к, function(ош, д){
+      готово_всех++;
+      if(д){
+        var в = возраст(д);
+        if(в < ЛУЧШИЙ_ВОЗРАСТ){ ЛУЧШИЙ_ВОЗРАСТ = в; ЛУЧШЕЕ = д; ЛУЧШИЙ_ИСТ = к; }
+      }
+      if(готово_всех >= ждём) итог();
+      else if(ЛУЧШЕЕ && ЛУЧШИЙ_ВОЗРАСТ < 30) итог();   /* уже свежайшие — не ждём остальных */
+    });
+  });
 }
 
-document.getElementById("обнкн").onclick=function(){тян(0)};
+document.getElementById("обнкн").onclick=function(){тян()};
 document.getElementById("чаткн").onclick=чатШлю;
 document.getElementById("чатввод").addEventListener("keydown",function(e){if(e.key==="Enter")чатШлю()});
 document.getElementById("стр-назад").onclick=function(){СТРАНИЦА++;рисоватьЛенту()};
 document.getElementById("стр-вперёд").onclick=function(){СТРАНИЦА--;рисоватьЛенту()};
 document.getElementById("стр-свеж").onclick=function(){СТРАНИЦА=0;рисоватьЛенту()};
-document.addEventListener("visibilitychange",function(){if(!document.hidden)тян(0)});
+document.addEventListener("visibilitychange",function(){if(!document.hidden)тян()});
 
 чатТян();
-тян(0);
-setInterval(function(){тян(0)},90000);
+тян();
+setInterval(function(){тян()},120000);
 setInterval(чатТян,3000);
 </script></body></html>
