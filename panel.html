@@ -35,6 +35,16 @@ pre{margin:6px 0 0;white-space:pre-wrap;word-break:break-word;color:#b8c6d8;font
     <div id="запрос" style="margin-top:5px">—</div>
   </div>
 
+
+  <div id="чатовина" style="background:#101c2b;border:1px solid #2b4a7a;border-radius:12px;padding:11px 13px;margin:12px 0">
+    <div class="лб">Чат с агентом — пиши прямо во время его работы</div>
+    <div id="чатлента" style="max-height:210px;overflow:auto;margin:7px 0;font-size:12.5px"></div>
+    <div style="display:flex;gap:7px">
+      <input id="чатввод" placeholder="напиши, что нужно изменить или уточнить…" style="flex:1;background:#0b0e13;border:1px solid #2b4a7a;border-radius:9px;color:#e8f0fb;padding:8px 11px;font:inherit">
+      <button class="кн" id="чаткн">отправить</button>
+    </div>
+    <div id="чатсост" style="color:#6b7889;font-size:11.5px;margin-top:5px"></div>
+  </div>
   <div class="ц">
     <div><b id="цз">0</b><span>действий записано</span></div>
     <div><b id="цх">0</b><span>действий в этом ходе</span></div>
@@ -107,6 +117,34 @@ function тян(){
     });
 }
 document.getElementById("обнкн").onclick=тян;
+
+var чатПосле=0;
+function чатР(з){
+  var л=document.getElementById("чатлента");
+  if(!з.length){л.innerHTML='<i style="color:#6b7889">сообщений пока нет</i>';return}
+  var с="";
+  for(var i=0;i<з.length;i++){var м=з[i];
+    var свой=м.кто==="ты";
+    с+='<div style="margin:5px 0;padding:6px 9px;border-radius:9px;background:'+(свой?"#1c2b42":"#12281f")+'">'+
+       '<span style="color:#6b7889">'+esc(String(м.в||"").split("T")[1]||"")+' '+(свой?"ты":"агент")+':</span> '+esc(м.текст)+'</div>';}
+  л.innerHTML=с; л.scrollTop=л.scrollHeight;
+}
+function чатТян(){
+  fetch("чат?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.json()}).then(function(з){
+    чатР(з); document.getElementById("чатсост").textContent="обновлено "+new Date().toLocaleTimeString("ru-RU");
+  }).catch(function(){ document.getElementById("чатсост").textContent="чат работает только на живой панели (порт 8099)"; });
+}
+function чатШлю(){
+  var в=document.getElementById("чатввод"), т=(в.value||"").trim();
+  if(!т)return;
+  fetch("чат",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({текст:т})})
+    .then(function(){в.value="";чатТян()})
+    .catch(function(){document.getElementById("чатсост").textContent="не отправилось: нет связи с панелью"});
+}
+document.getElementById("чаткн").onclick=чатШлю;
+document.getElementById("чатввод").addEventListener("keydown",function(e){if(e.key==="Enter")чатШлю()});
+чатТян(); setInterval(чатТян,2000);
+
 тян(); setInterval(тян,5000);
 document.addEventListener("visibilitychange",function(){if(!document.hidden)тян()});
 </script></body></html>
