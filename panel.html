@@ -15,12 +15,16 @@ body{margin:0;background:#0b0e13;color:#dfe7f2;font:13px/1.45 ui-monospace,SFMon
 .ц b{display:block;font-size:20px;color:#9fc6ff}
 .ц span{font-size:11px;color:#8b97a8}
 #правила{background:#0f1520;border:1px solid #222c3a;border-radius:11px;padding:10px 13px;margin-bottom:12px;font-size:12.5px}
-details{background:#0f1520;border:1px solid #222c3a;border-left:3px solid #5ee6a0;border-radius:9px;padding:8px 11px;margin-bottom:6px}
-details summary{cursor:pointer;list-style:none}
+.закон{display:flex;gap:7px;align-items:flex-start;padding:2px 0}
+.с{width:14px;flex:0 0 14px;text-align:center}
+details.дейст{background:#0f1520;border:1px solid #222c3a;border-left:3px solid #5ee6a0;border-radius:9px;padding:8px 11px;margin-bottom:6px}
+details.дейст summary{cursor:pointer;list-style:none}
 pre{margin:6px 0 0;white-space:pre-wrap;word-break:break-word;color:#b8c6d8;font-size:11.5px}
 .кн{background:#1c3b63;border:1px solid #2f5c95;color:#e8f0fb;border-radius:9px;padding:7px 13px;font:inherit;cursor:pointer}
 .кн:active{transform:scale(.97)}
+.кн:disabled{opacity:.35;cursor:default}
 .ф{font-size:12px;color:#a9b8cb}
+#стр{display:flex;gap:8px;align-items:center;margin:8px 0;font-size:12px;color:#8b97a8}
 </style></head>
 <body><div class="об">
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -35,41 +39,66 @@ pre{margin:6px 0 0;white-space:pre-wrap;word-break:break-word;color:#b8c6d8;font
     <div id="запрос" style="margin-top:5px">—</div>
   </div>
 
-
   <div id="чатовина" style="background:#101c2b;border:1px solid #2b4a7a;border-radius:12px;padding:11px 13px;margin:12px 0">
     <div class="лб">Чат с агентом — пиши прямо во время его работы</div>
-    <div id="чатлента" style="max-height:210px;overflow:auto;margin:7px 0;font-size:12.5px"></div>
+    <div id="чатлента" style="max-height:200px;overflow:auto;margin:7px 0;font-size:12.5px"></div>
     <div style="display:flex;gap:7px">
       <input id="чатввод" placeholder="напиши, что нужно изменить или уточнить…" style="flex:1;background:#0b0e13;border:1px solid #2b4a7a;border-radius:9px;color:#e8f0fb;padding:8px 11px;font:inherit">
       <button class="кн" id="чаткн">отправить</button>
     </div>
     <div id="чатсост" style="color:#6b7889;font-size:11.5px;margin-top:5px"></div>
   </div>
+
   <div class="ц">
     <div><b id="цз">0</b><span>действий записано</span></div>
     <div><b id="цх">0</b><span>действий в этом ходе</span></div>
-    <div><b id="цп">—</b><span>записей переписки прочитано</span></div>
+    <div><b id="цп">—</b><span>записей журнала прочитано</span></div>
     <div><b id="цц">—</b><span>хеш-цепочка</span></div>
   </div>
 
   <div id="правила"></div>
 
-  <div class="лб" style="margin:14px 0 6px">Лента действий — каждое, по порядку</div>
+  <div class="лб" style="margin:14px 0 6px">Лента действий · по 20 на страницу</div>
+  <div id="стр">
+    <button class="кн" id="стр-назад">← раньше</button>
+    <span id="стр-текст">страница 1</span>
+    <button class="кн" id="стр-вперёд">позже →</button>
+    <button class="кн" id="стр-свеж" style="margin-left:auto">к свежим</button>
+  </div>
   <div id="лента"></div>
 
   <div class="лб" style="margin:18px 0 6px">Файлы, изменённые за последний час</div>
   <div class="ф" id="файлы"></div>
 
   <div style="margin:18px 0 30px;color:#5d6a7a;font-size:11.5px">
-    Страница читает <b>actions.json</b> — файл, который агент обновляет после каждого действия.
-    Лента ссылается хешами, поэтому пропуск действия виден как «порвана». Кнопка «обновить» перечитывает файл.
+    Данные берутся из <b>actions.json</b> без кэша. Кнопка «обновить» перечитывает сразу, страница — каждые 5 секунд.
   </div>
 </div>
 <script>
 var ВСТРОЕНО = window.__ДАННЫЕ__ || null;
+var ДАННЫЕ = null, СТРАНИЦА = 0, ПО_СТРАНИЦЕ = 20;
+var ИСТОЧНИКИ = [
+  "actions.json?t=",                                                       /* живая панель в Arena */
+  "https://raw.githubusercontent.com/Ayt1741/hranilishe/main/actions.json?t=" /* сайт: без 10-минутного кэша */
+];
 function esc(t){return String(t==null?"":t).replace(/[<>&]/g,function(c){return {"<":"&lt;",">":"&gt;","&":"&amp;"}[c]})}
 function зн(v){return v?'<span style="color:#5ee6a0">✓</span>':'<span style="color:#ff7d7d">✗</span>'}
+function цветС(с){return с==="✓"?"#5ee6a0":(с==="✗"?"#ff7d7d":"#8b97a8")}
+
+function рисоватьПравила(д){
+  var п=д.проверка||{}, з=д.законы||[], с="";
+  if(з.length){
+    с+='<div class="лб" style="margin-bottom:6px">Законы, которые я соблюдаю в этом ходе</div>';
+    for(var i=0;i<з.length;i++){
+      с+='<div class="закон"><span class="с" style="color:'+цветС(з[i].статус)+'">'+esc(з[i].статус)+'</span><span>'+esc(з[i].текст)+(з[i].пояснение?' <span style="color:#6b7889">— '+esc(з[i].пояснение)+'</span>':'')+'</span></div>';
+    }
+    с+='<div style="margin-top:8px;color:#8b97a8;font-size:12px">журнал: '+((п.переписка||{}).записей||"—")+' записей · sha256 '+esc(String((п.переписка||{}).sha256||"").slice(0,16))+'… · действий в ходе: '+(п.действий_в_ходе||0)+'</div>';
+  }
+  document.getElementById("правила").innerHTML=с;
+}
+
 function рисовать(д){
+  ДАННЫЕ=д;
   var п=д.проверка||{};
   document.getElementById("запрос").textContent=п.запрос||"—";
   document.getElementById("цз").textContent=п["записей"]||0;
@@ -79,51 +108,42 @@ function рисовать(д){
   var ц=document.getElementById("цц");
   ц.textContent=п["цепочка_целая"]?"целая":"порвана";
   ц.style.color=п["цепочка_целая"]?"#5ee6a0":"#ff7d7d";
-  document.getElementById("т").style.background="#5ee6a0";
-  document.getElementById("жт").textContent="данные получены";
-  document.getElementById("обн").textContent=(п.опубликовано?("опубликовано "+п.опубликовано.replace("T"," ")):"");
-  document.getElementById("правила").innerHTML=
-    зн(п["правило_переписка_первой"])+' первым действием хода прочитана вся переписка'+
-    (пер.sha256?' <span style="color:#6b7889">· sha256 '+esc(String(пер.sha256).slice(0,16))+'…</span>':'')+'<br>'+
-    зн(п["правило_ход_дописан"])+' ход (запрос и ответ) дописан в журнал переписки<br>'+
-    зн(п["цепочка_целая"])+' ни одно действие не выпало из цепочки'+
-    ((п.разрывы&&п.разрывы.length)?' <span style="color:#ff7d7d">· разрывы на №'+esc(п.разрывы.join(", "))+'</span>':'');
-  var л=(д.действия||[]).slice().reverse(), с="";
-  for(var i=0;i<л.length;i++){var з=л[i];
+  document.getElementById("обн").textContent=п.опубликовано?("данные от "+String(п.опубликовано).replace("T"," ")):"";
+  рисоватьПравила(д);
+  рисоватьЛенту();
+  var ф=д.файлы||[], фс="";
+  for(var j=0;j<ф.length;j++)фс+='<div>'+esc(ф[j].когда)+' · '+esc(ф[j].путь)+' · '+ф[j].б+' б</div>';
+  document.getElementById("файлы").innerHTML=фс||'<div style="color:#6b7889">нет изменений</div>';
+}
+
+function рисоватьЛенту(){
+  if(!ДАННЫЕ)return;
+  var всё=(ДАННЫЕ.действия||[]).slice().reverse();       /* свежие сверху */
+  var всего=Math.max(1,Math.ceil(всё.length/ПО_СТРАНИЦЕ));
+  if(СТРАНИЦА>всего-1)СТРАНИЦА=всего-1;
+  if(СТРАНИЦА<0)СТРАНИЦА=0;
+  var кусок=всё.slice(СТРАНИЦА*ПО_СТРАНИЦЕ,(СТРАНИЦА+1)*ПО_СТРАНИЦЕ);
+  var с="";
+  for(var i=0;i<кусок.length;i++){var з=кусок[i];
     var цв=з.код===0?"#5ee6a0":"#ff7d7d";
-    с+='<details style="border-left-color:'+цв+'"><summary>'+
+    с+='<details class="дейст" style="border-left-color:'+цв+'"><summary>'+
        '<span style="color:#6b7889">№'+з.н+' · '+(з.ход?("ход "+з.ход):"без хода")+' · '+esc(String(з.в||"").split("T")[1]||"")+'</span> '+
        '<b>'+esc(з.что)+'</b>'+
        '<span style="color:#6b7889"> · код '+з.код+' · '+з.сек+' с · '+з["символов"]+' симв. · sha '+esc(String(з.хеш||"").slice(0,8))+'</span></summary>'+
        '<div style="margin-top:6px;color:#8b97a8;font-size:11.5px;word-break:break-all">команда: '+esc(з.команда||"—")+'</div>'+
        '<pre>'+esc(String(з.вывод||"").slice(0,1200))+'</pre></details>';}
   document.getElementById("лента").innerHTML=с||'<div style="color:#6b7889">пока пусто</div>';
-  var ф=д.файлы||[], фс="";
-  for(var j=0;j<ф.length;j++)фс+='<div>'+esc(ф[j].когда)+' · '+esc(ф[j].путь)+' · '+ф[j].б+' б</div>';
-  document.getElementById("файлы").innerHTML=фс||'<div style="color:#6b7889">нет изменений</div>';
+  document.getElementById("стр-текст").textContent="страница "+(СТРАНИЦА+1)+" из "+всего+" · всего "+всё.length+" действий";
+  document.getElementById("стр-назад").disabled=(СТРАНИЦА>=всего-1);
+  document.getElementById("стр-вперёд").disabled=(СТРАНИЦА<=0);
 }
-function тян(){
-  fetch("actions.json?t="+Date.now(),{cache:"no-store"}).then(function(r){
-    if(!r.ok)throw new Error("нет файла actions.json");
-    return r.json()}).then(function(д){рисовать(д);document.getElementById("жт").textContent="данные из интернета"}).catch(function(e){
-      if(ВСТРОЕНО && ВСТРОЕНО.действия){рисовать(ВСТРОЕНО);
-        document.getElementById("жт").textContent="офлайн: данные из файла";
-        document.getElementById("т").style.background="#ffcf6b";
-        document.getElementById("обн").textContent="снимок от "+(ВСТРОЕНО.проверка||{}).опубликовано||"";
-      } else {
-        document.getElementById("т").style.background="#ff7d7d";
-        document.getElementById("жт").textContent="нет данных";
-      }
-    });
-}
-document.getElementById("обнкн").onclick=тян;
 
 var чатПосле=0;
 function чатР(з){
   var л=document.getElementById("чатлента");
   if(!з.length){л.innerHTML='<i style="color:#6b7889">сообщений пока нет</i>';return}
-  var с="";
-  for(var i=0;i<з.length;i++){var м=з[i];
+  var посл=з.slice(-20), с="";
+  for(var i=0;i<посл.length;i++){var м=посл[i];
     var свой=м.кто==="ты";
     с+='<div style="margin:5px 0;padding:6px 9px;border-radius:9px;background:'+(свой?"#1c2b42":"#12281f")+'">'+
        '<span style="color:#6b7889">'+esc(String(м.в||"").split("T")[1]||"")+' '+(свой?"ты":"агент")+':</span> '+esc(м.текст)+'</div>';}
@@ -132,7 +152,7 @@ function чатР(з){
 function чатТян(){
   fetch("чат?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.json()}).then(function(з){
     чатР(з); document.getElementById("чатсост").textContent="обновлено "+new Date().toLocaleTimeString("ru-RU");
-  }).catch(function(){ document.getElementById("чатсост").textContent="чат работает только на живой панели (порт 8099)"; });
+  }).catch(function(){ document.getElementById("чатсост").textContent="чат работает на живой панели (превью в Arena)"; });
 }
 function чатШлю(){
   var в=document.getElementById("чатввод"), т=(в.value||"").trim();
@@ -141,10 +161,36 @@ function чатШлю(){
     .then(function(){в.value="";чатТян()})
     .catch(function(){document.getElementById("чатсост").textContent="не отправилось: нет связи с панелью"});
 }
+
+function тян(i){
+  var к=(i===undefined?0:i);
+  if(к>=ИСТОЧНИКИ.length){
+    if(ВСТРОЕНО){рисовать(ВСТРОЕНО);
+      document.getElementById("жт").textContent="офлайн: данные из файла";
+      document.getElementById("т").style.background="#ffcf6b";}
+    else {document.getElementById("т").style.background="#ff7d7d";document.getElementById("жт").textContent="нет данных";}
+    return;
+  }
+  fetch(ИСТОЧНИКИ[к]+Date.now(),{cache:"no-store"}).then(function(r){
+    if(!r.ok)throw new Error("код "+r.status); return r.json();
+  }).then(function(д){
+    if(!д || !д.действия || !д.действия.length)throw new Error("пусто");
+    рисовать(д);
+    document.getElementById("т").style.background="#5ee6a0";
+    document.getElementById("жт").textContent=(к===0?"живая панель":"сайт (без кэша)");
+  }).catch(function(){ тян(к+1); });
+}
+
+document.getElementById("обнкн").onclick=function(){тян(0)};
 document.getElementById("чаткн").onclick=чатШлю;
 document.getElementById("чатввод").addEventListener("keydown",function(e){if(e.key==="Enter")чатШлю()});
-чатТян(); setInterval(чатТян,2000);
+document.getElementById("стр-назад").onclick=function(){СТРАНИЦА++;рисоватьЛенту()};
+document.getElementById("стр-вперёд").onclick=function(){СТРАНИЦА--;рисоватьЛенту()};
+document.getElementById("стр-свеж").onclick=function(){СТРАНИЦА=0;рисоватьЛенту()};
+document.addEventListener("visibilitychange",function(){if(!document.hidden)тян(0)});
 
-тян(); setInterval(тян,5000);
-document.addEventListener("visibilitychange",function(){if(!document.hidden)тян()});
+чатТян();
+тян(0);
+setInterval(function(){тян(0)},5000);
+setInterval(чатТян,3000);
 </script></body></html>
