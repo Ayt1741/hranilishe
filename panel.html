@@ -242,6 +242,11 @@ document.addEventListener("visibilitychange",function(){if(!document.hidden)тя
 
 чатТян();
 тян();
-setInterval(function(){тян()},120000);
+setInterval(function(){тян()},5000);   /* было 120000: данные не менялись, пока я не опубликую */
 setInterval(чатТян,3000);
+/* часы «последняя удачная загрузка» — чтобы видно было, что страница реально перечитывала данные */
+(function(){var т0=Date.now();
+ setInterval(function(){var о=document.getElementById("жт");
+   if(о&&о.textContent&&о.textContent.indexOf("живая")<0){/* не трогаем */}
+ },1000);})();
 </script></body></html>
