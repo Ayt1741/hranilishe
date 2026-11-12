@@ -31,6 +31,7 @@ pre{margin:6px 0 0;white-space:pre-wrap;word-break:break-word;color:#b8c6d8;font
     <b style="font-size:17px;color:#cfe3ff">Панель действий агента</b>
     <span class="bad"><span class="т" id="т"></span><span id="жт">загружаю…</span></span>
     <span id="обн" style="color:#6b7889;font-size:11.5px"></span>
+    <span id="вер" style="color:#4f5d70;font-size:11px">страница 9.2</span>
     <button class="кн" id="обнкн" style="margin-left:auto">обновить</button>
   </div>
 
@@ -162,7 +163,9 @@ function чатШлю(){
   if(!т)return;
   fetch("чат",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({текст:т})})
     .then(function(){в.value="";чатТян()})
-    .catch(function(){document.getElementById("чатсост").textContent="не отправилось: нет связи с панелью"});
+    .catch(function(){
+      document.getElementById("чатсост").innerHTML='не отправилось: на сайте нет сервера. Пиши в живой панели или <a href="https://github.com/Ayt1741/hranilishe/issues/new?title=ЧАТ&body=Пиши здесь сообщение агенту" target="_blank" style="color:#9fc6ff">открой задачу в GitHub</a> — её я читаю каждым действием.';
+    });
 }
 
 var ЛУЧШЕЕ = null, ЛУЧШИЙ_ИСТ = -1, ЛУЧШИЙ_ВОЗРАСТ = 1e12;
