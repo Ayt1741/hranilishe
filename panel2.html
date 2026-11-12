@@ -80,7 +80,16 @@ pre{margin:6px 0 0;white-space:pre-wrap;word-break:break-word;color:#b8c6d8;font
 <script>
 var ВСТРОЕНО = window.__ДАННЫЕ__ || null;
 var ДАННЫЕ = null, СТРАНИЦА = 0, ПО_СТРАНИЦЕ = 20, ЕСТЬ = false;
-var ИСТОЧНИКИ = [
+/* Порядок источников зависит от того, откуда открыта страница:
+   в Arena — локальный файл первым (там нет кэша вообще, это самый быстрый путь);
+   на github.io — наоборот, локальный файл последний: CDN Pages кэширует его до 15 минут,
+   и «живая» страница показывала бы ленту четвертьчасовой давности (закон 108). */
+var НА_GITHUB = /(^|\.)github\.io$/.test(location.hostname);
+var ИСТОЧНИКИ = НА_GITHUB ? [
+  function(t){return "https://api.github.com/repos/Ayt1741/hranilishe/contents/actions.json?t="+t}, /* API: без кэша */
+  function(t){return "https://raw.githubusercontent.com/Ayt1741/hranilishe/main/actions.json?t="+t}, /* запасной */
+  function(t){return "actions.json?t="+t}                                                       /* локальный — последний */
+] : [
   function(t){return "actions.json?t="+t},                                                     /* живая панель в Arena — без кэша вообще */
   function(t){return "https://api.github.com/repos/Ayt1741/hranilishe/contents/actions.json?t="+t}, /* API: всегда свежий */
   function(t){return "https://raw.githubusercontent.com/Ayt1741/hranilishe/main/actions.json?t="+t} /* запасной */
