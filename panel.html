@@ -242,7 +242,7 @@ function тян(){
   шаг();
 }
 
-document.getElementById("обнкн").onclick=function(){тян()};
+document.getElementById("обнкн").onclick=function(){БЫЛ_API=0;тян()};  /* кнопка «обновить» опрашивает api.github.com немедленно, не ждёт 60 с */
 document.getElementById("чаткн").onclick=чатШлю;
 document.getElementById("чатввод").addEventListener("keydown",function(e){if(e.key==="Enter")чатШлю()});
 document.getElementById("стр-назад").onclick=function(){СТРАНИЦА++;рисоватьЛенту()};
