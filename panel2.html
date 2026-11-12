@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Панель действий агента</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#0b0e13;color:#dfe7f2;font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace}
+.об{max-width:980px;margin:0 auto;padding:14px}
+.bad{display:inline-flex;align-items:center;gap:6px;background:#16202c;border:1px solid #24303f;border-radius:20px;padding:3px 10px;font-size:12px}
+.т{width:9px;height:9px;border-radius:50%;background:#8b97a8}
+.зап{background:#101c2b;border:1px solid #2b4a7a;border-radius:12px;padding:11px 13px;margin:12px 0}
+.лб{font-size:11px;color:#8b97a8;text-transform:uppercase;letter-spacing:.5px}
+.ц{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:12px}
+.ц>div{flex:1 1 150px;background:#0f1520;border:1px solid #222c3a;border-radius:11px;padding:9px 11px}
+.ц b{display:block;font-size:20px;color:#9fc6ff}
+.ц span{font-size:11px;color:#8b97a8}
+#правила{background:#0f1520;border:1px solid #222c3a;border-radius:11px;padding:10px 13px;margin-bottom:12px;font-size:12.5px}
+.закон{display:flex;gap:7px;align-items:flex-start;padding:2px 0}
+.с{width:14px;flex:0 0 14px;text-align:center}
+details.дейст{background:#0f1520;border:1px solid #222c3a;border-left:3px solid #5ee6a0;border-radius:9px;padding:8px 11px;margin-bottom:6px}
+details.дейст summary{cursor:pointer;list-style:none}
+pre{margin:6px 0 0;white-space:pre-wrap;word-break:break-word;color:#b8c6d8;font-size:11.5px}
+.кн{background:#1c3b63;border:1px solid #2f5c95;color:#e8f0fb;border-radius:9px;padding:7px 13px;font:inherit;cursor:pointer}
+.кн:active{transform:scale(.97)}
+.кн:disabled{opacity:.35;cursor:default}
+.ф{font-size:12px;color:#a9b8cb}
+#стр{display:flex;gap:8px;align-items:center;margin:8px 0;font-size:12px;color:#8b97a8}
+</style></head>
+<body><div class="об">
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <b style="font-size:17px;color:#cfe3ff">Панель действий агента</b>
+    <span class="bad"><span class="т" id="т"></span><span id="жт">загружаю…</span></span>
+    <span id="обн" style="color:#6b7889;font-size:11.5px"></span>
+    <span id="вер" style="color:#4f5d70;font-size:11px">страница 9.2</span>
+    <button class="кн" id="обнкн" style="margin-left:auto">обновить</button>
+  </div>
+
+  <div class="зап">
+    <div class="лб">Запрос пользователя, над которым идёт работа</div>
+    <div id="запрос" style="margin-top:5px">—</div>
+  </div>
+
+  <div id="чатовина" style="background:#101c2b;border:1px solid #2b4a7a;border-radius:12px;padding:11px 13px;margin:12px 0">
+    <div class="лб">Чат с агентом — пиши прямо во время его работы</div>
+    <div id="чатлента" style="max-height:200px;overflow:auto;margin:7px 0;font-size:12.5px"></div>
+    <div style="display:flex;gap:7px">
+      <input id="чатввод" placeholder="напиши, что нужно изменить или уточнить…" style="flex:1;background:#0b0e13;border:1px solid #2b4a7a;border-radius:9px;color:#e8f0fb;padding:8px 11px;font:inherit">
+      <button class="кн" id="чаткн">отправить</button>
+    </div>
+    <div id="чатсост" style="color:#6b7889;font-size:11.5px;margin-top:5px"></div>
+  </div>
+
+  <div class="ц">
+    <div><b id="цз">0</b><span>действий записано</span></div>
+    <div><b id="цх">0</b><span>действий в этом ходе</span></div>
+    <div><b id="цп">—</b><span>записей журнала прочитано</span></div>
+    <div><b id="цц">—</b><span>хеш-цепочка</span></div>
+  </div>
+
+
+  <div class="лб" style="margin:14px 0 6px">Лента действий · по 20 на страницу</div>
+  <div id="стр">
+    <button class="кн" id="стр-назад">← раньше</button>
+    <span id="стр-текст">страница 1</span>
+    <button class="кн" id="стр-вперёд">позже →</button>
+    <button class="кн" id="стр-свеж" style="margin-left:auto">к свежим</button>
+  </div>
+  <div id="лента"></div>
+
+  <div class="лб" style="margin:18px 0 6px">Файлы, изменённые за последний час</div>
+  <div class="ф" id="файлы"></div>
+
+  <div class="лб" style="margin:18px 0 6px">Законы, которые я соблюдаю в этом ходе</div>
+  <div id="правила"></div>
+
+  <div style="margin:18px 0 30px;color:#5d6a7a;font-size:11.5px">
+    Данные берутся из <b>actions.json</b> без кэша. Кнопка «обновить» перечитывает сразу, страница — каждые 5 секунд.
+  </div>
+</div>
+<script>
+var ВСТРОЕНО = window.__ДАННЫЕ__ || null;
+var ДАННЫЕ = null, СТРАНИЦА = 0, ПО_СТРАНИЦЕ = 20, ЕСТЬ = false;
+var ИСТОЧНИКИ = [
+  function(t){return "actions.json?t="+t},                                                     /* живая панель в Arena — без кэша вообще */
+  function(t){return "https://api.github.com/repos/Ayt1741/hranilishe/contents/actions.json?t="+t}, /* API: всегда свежий */
+  function(t){return "https://raw.githubusercontent.com/Ayt1741/hranilishe/main/actions.json?t="+t} /* запасной */
+];
+function esc(t){return String(t==null?"":t).replace(/[<>&]/g,function(c){return {"<":"&lt;",">":"&gt;","&":"&amp;"}[c]})}
+function зн(v){return v?'<span style="color:#5ee6a0">✓</span>':'<span style="color:#ff7d7d">✗</span>'}
+function цветС(с){return с==="✓"?"#5ee6a0":(с==="✗"?"#ff7d7d":"#8b97a8")}
+
+function рисоватьПравила(д){
+  var п=д.проверка||{}, з=д.законы||[], с="";
+  if(з.length){
+    
+    for(var i=0;i<з.length;i++){
+      с+='<div class="закон"><span class="с" style="color:'+цветС(з[i].статус)+'">'+esc(з[i].статус)+'</span><span>'+esc(з[i].текст)+(з[i].пояснение?' <span style="color:#6b7889">— '+esc(з[i].пояснение)+'</span>':'')+'</span></div>';
+    }
+    с+='<div style="margin-top:8px;color:#8b97a8;font-size:12px">журнал: '+((п.переписка||{}).записей||"—")+' записей · sha256 '+esc(String((п.переписка||{}).sha256||"").slice(0,16))+'… · действий в ходе: '+(п.действий_в_ходе||0)+'</div>';
+  }
+  document.getElementById("правила").innerHTML=с;
+}
+
+function рисовать(д){
+  ДАННЫЕ=д;
+  var п=д.проверка||{};
+  document.getElementById("запрос").textContent=п.запрос||"—";
+  document.getElementById("цз").textContent=п["записей"]||0;
+  document.getElementById("цх").textContent=п["действий_в_ходе"]||0;
+  var пер=п.переписка||{};
+  document.getElementById("цп").textContent=пер["записей"]?(пер["записей"]+" / "+пер["символов"]):"—";
+  var ц=document.getElementById("цц");
+  ц.textContent=п["цепочка_целая"]?"целая":"порвана";
+  ц.style.color=п["цепочка_целая"]?"#5ee6a0":"#ff7d7d";
+  document.getElementById("обн").textContent=п.опубликовано?("данные от "+String(п.опубликовано).replace("T"," ")):"";
+  рисоватьПравила(д);
+  рисоватьЛенту();
+  var ф=д.файлы||[], фс="";
+  for(var j=0;j<ф.length;j++)фс+='<div>'+esc(ф[j].когда)+' · '+esc(ф[j].путь)+' · '+ф[j].б+' б</div>';
+  document.getElementById("файлы").innerHTML=фс||'<div style="color:#6b7889">нет изменений</div>';
+}
+
+function рисоватьЛенту(){
+  if(!ДАННЫЕ)return;
+  var всё=(ДАННЫЕ.действия||[]).slice().reverse();       /* свежие сверху */
+  var всего=Math.max(1,Math.ceil(всё.length/ПО_СТРАНИЦЕ));
+  if(СТРАНИЦА>всего-1)СТРАНИЦА=всего-1;
+  if(СТРАНИЦА<0)СТРАНИЦА=0;
+  var кусок=всё.slice(СТРАНИЦА*ПО_СТРАНИЦЕ,(СТРАНИЦА+1)*ПО_СТРАНИЦЕ);
+  var с="";
+  for(var i=0;i<кусок.length;i++){var з=кусок[i];
+    var цв=з.код===0?"#5ee6a0":"#ff7d7d";
+    с+='<details class="дейст" style="border-left-color:'+цв+'"><summary>'+
+       '<span style="color:#6b7889">№'+з.н+' · '+(з.ход?("ход "+з.ход):"без хода")+' · '+esc(String(з.в||"").split("T")[1]||"")+'</span> '+
+       '<b>'+esc(з.что)+'</b>'+
+       '<span style="color:#6b7889"> · код '+з.код+' · '+з.сек+' с · '+з["символов"]+' симв. · sha '+esc(String(з.хеш||"").slice(0,8))+'</span></summary>'+
+       '<div style="margin-top:6px;color:#8b97a8;font-size:11.5px;word-break:break-all">команда: '+esc(з.команда||"—")+'</div>'+
+       '<pre>'+esc(String(з.вывод||"").slice(0,1200))+'</pre></details>';}
+  document.getElementById("лента").innerHTML=с||'<div style="color:#6b7889">пока пусто</div>';
+  document.getElementById("стр-текст").textContent="страница "+(СТРАНИЦА+1)+" из "+всего+" · всего "+всё.length+" действий";
+  document.getElementById("стр-назад").disabled=(СТРАНИЦА>=всего-1);
+  document.getElementById("стр-вперёд").disabled=(СТРАНИЦА<=0);
+}
+
+var чатПосле=0;
+function чатР(з){
+  var л=document.getElementById("чатлента");
+  if(!з.length){л.innerHTML='<i style="color:#6b7889">сообщений пока нет</i>';return}
+  var посл=з.slice(-20), с="";
+  for(var i=0;i<посл.length;i++){var м=посл[i];
+    var свой=м.кто==="ты";
+    с+='<div style="margin:5px 0;padding:6px 9px;border-radius:9px;background:'+(свой?"#1c2b42":"#12281f")+'">'+
+       '<span style="color:#6b7889">'+esc(String(м.в||"").split("T")[1]||"")+' '+(свой?"ты":"агент")+':</span> '+esc(м.текст)+'</div>';}
+  л.innerHTML=с; л.scrollTop=л.scrollHeight;
+}
+function чатТян(){
+  fetch("чат?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.json()}).then(function(з){
+    чатР(з); document.getElementById("чатсост").textContent="обновлено "+new Date().toLocaleTimeString("ru-RU");
+  }).catch(function(){ document.getElementById("чатсост").textContent="чат работает на живой панели (превью в Arena)"; });
+}
+function чатШлю(){
+  var в=document.getElementById("чатввод"), т=(в.value||"").trim();
+  if(!т)return;
+  fetch("чат",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({текст:т})})
+    .then(function(){в.value="";чатТян()})
+    .catch(function(){
+      document.getElementById("чатсост").innerHTML='не отправилось: на сайте нет сервера. Пиши в живой панели или <a href="https://github.com/Ayt1741/hranilishe/issues/new?title=ЧАТ&body=Пиши здесь сообщение агенту" target="_blank" style="color:#9fc6ff">открой задачу в GitHub</a> — её я читаю каждым действием.';
+    });
+}
+
+var ЛУЧШЕЕ = null, ЛУЧШИЙ_ИСТ = -1, ЛУЧШИЙ_ВОЗРАСТ = 1e12;
+
+function возраст(д){
+  try{ return Math.max(0, Math.round((Date.now() - new Date(д.проверка.опубликовано).getTime())/1000)); }
+  catch(e){ return 1e12; }
+}
+
+function взять(к, готово){
+  var адрес = ИСТОЧНИКИ[к](Date.now());
+  fetch(адрес,{cache:"no-store"}).then(function(r){
+    if(!r.ok) throw new Error("код "+r.status);
+    return r.json();
+  }).then(function(сырое){
+    var д = сырое;
+    if(сырое && сырое.content && сырое.encoding){
+      var б = atob(сырое.content.replace(/\s/g,""));
+      var байты = new Uint8Array(б.length);
+      for(var i=0;i<б.length;i++) байты[i]=б.charCodeAt(i);
+      д = JSON.parse(new TextDecoder("utf-8").decode(байты));
+    }
+    if(!д || !д.действия || !д.действия.length) throw new Error("пусто");
+    готово(null, д, к);
+  }).catch(function(e){ готово(e, null, к); });
+}
+
+function тян(){
+  ЛУЧШЕЕ = null; ЛУЧШИЙ_ИСТ = -1; ЛУЧШИЙ_ВОЗРАСТ = 1e12;
+  var ждём = ИСТОЧНИКИ.length, готово_всех = 0, закончили = false;
+
+  function итог(){
+    if(закончили) return;
+    закончили = true;
+    if(ЛУЧШЕЕ){
+      ЕСТЬ = true;
+      рисовать(ЛУЧШЕЕ);
+      document.getElementById("т").style.background = "5ee6a0";
+      document.getElementById("т").style.background = "#5ee6a0";
+      document.getElementById("жт").textContent = (ЛУЧШИЙ_ИСТ===0?"живая панель":(ЛУЧШИЙ_ИСТ===1?"сайт · данные GitHub API":"сайт · запасной источник"));
+      var ов = document.getElementById("обн");
+      ов.textContent = "данные от "+String(ЛУЧШЕЕ.проверка.опубликовано||"").replace("T"," ")+" · возраст "+ЛУЧШИЙ_ВОЗРАСТ+" с";
+      ов.style.color = ЛУЧШИЙ_ВОЗРАСТ>180?"#ff7d7d":(ЛУЧШИЙ_ВОЗРАСТ>70?"#ffcf6b":"#5ee6a0");
+      return;
+    }
+    if(ЕСТЬ){document.getElementById("т").style.background="#ffcf6b";
+      document.getElementById("жт").textContent="нет связи — показаны прошлые данные";return}
+    if(ВСТРОЕНО){рисовать(ВСТРОЕНО);ЕСТЬ=true;
+      document.getElementById("жт").textContent="офлайн: данные из файла";
+      document.getElementById("т").style.background="#ffcf6b";}
+    else {document.getElementById("т").style.background="#ff7d7d";document.getElementById("жт").textContent="нет данных";}
+  }
+
+  ИСТОЧНИКИ.forEach(function(_, к){
+    взять(к, function(ош, д){
+      готово_всех++;
+      if(д){
+        var в = возраст(д);
+        if(в < ЛУЧШИЙ_ВОЗРАСТ){ ЛУЧШИЙ_ВОЗРАСТ = в; ЛУЧШЕЕ = д; ЛУЧШИЙ_ИСТ = к; }
+      }
+      if(готово_всех >= ждём) итог();
+      else if(ЛУЧШЕЕ && ЛУЧШИЙ_ВОЗРАСТ < 30) итог();   /* уже свежайшие — не ждём остальных */
+    });
+  });
+}
+
+document.getElementById("обнкн").onclick=function(){тян()};
+document.getElementById("чаткн").onclick=чатШлю;
+document.getElementById("чатввод").addEventListener("keydown",function(e){if(e.key==="Enter")чатШлю()});
+document.getElementById("стр-назад").onclick=function(){СТРАНИЦА++;рисоватьЛенту()};
+document.getElementById("стр-вперёд").onclick=function(){СТРАНИЦА--;рисоватьЛенту()};
+document.getElementById("стр-свеж").onclick=function(){СТРАНИЦА=0;рисоватьЛенту()};
+document.addEventListener("visibilitychange",function(){if(!document.hidden)тян()});
+
+чатТян();
+тян();
+setInterval(function(){тян()},120000);
+setInterval(чатТян,3000);
+</script></body></html>
