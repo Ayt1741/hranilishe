@@ -84,11 +84,16 @@ var ДАННЫЕ = null, СТРАНИЦА = 0, ПО_СТРАНИЦЕ = 20, ЕС�
    но 60 запросов в час без ключа, поэтому только если raw не ответил; 3) локальный файл —
    его кэширует CDN Pages до 15 минут, поэтому он последний.
    Замер 12.11 14:46: CDN actions.json отдавал 125 записей, raw и API — 128. Разница в 10 минут. */
+/* Замер 12.11 14:46 по одному и тому же файлу:
+   github.io отдал 125 действий (кэш CDN ~15 мин), raw отдал 128 (кэш ~5 мин),
+   api.github.com отдал 128 сразу. Поэтому api первый, но 60 запросов в час без ключа —
+   значит не чаще раза в минуту; между ними работает raw, файл сайта — последний. */
 var ИСТОЧНИКИ = [
-  function(t){return "https://raw.githubusercontent.com/Ayt1741/hranilishe/main/actions.json?t="+t},
   function(t){return "https://api.github.com/repos/Ayt1741/hranilishe/contents/actions.json?t="+t},
+  function(t){return "https://raw.githubusercontent.com/Ayt1741/hranilishe/main/actions.json?t="+t},
   function(t){return "actions.json?t="+t}
 ];
+var БЫЛ_API = 0;
 function esc(t){return String(t==null?"":t).replace(/[<>&]/g,function(c){return {"<":"&lt;",">":"&gt;","&":"&amp;"}[c]})}
 function зн(v){return v?'<span style="color:#5ee6a0">✓</span>':'<span style="color:#ff7d7d">✗</span>'}
 function цветС(с){return с==="✓"?"#5ee6a0":(с==="✗"?"#ff7d7d":"#8b97a8")}
@@ -198,7 +203,7 @@ function взять(к, готово){
 }
 
 function тян(){
-  var ИМЕНА=["raw.githubusercontent","api.github.com (запасной)","файл сайта (кэш CDN)"];
+  var ИМЕНА=["api.github.com (без кэша)","raw.githubusercontent (кэш ~5 мин)","файл сайта (кэш CDN ~15 мин)"];
   var попытка=0, лучший=null, лучший_возраст=1e12, лучший_ист=-1;
 
   function показать(){
@@ -223,6 +228,8 @@ function тян(){
   function шаг(){
     if(попытка>=ИСТОЧНИКИ.length){показать();return}
     var к=попытка++;
+    if(к===0 && Date.now()-БЫЛ_API < 60000){ шаг(); return; }   /* экономим лимит API */
+    if(к===0) БЫЛ_API = Date.now();
     взять(к,function(ош,д){
       if(д){
         var в=возраст(д);
