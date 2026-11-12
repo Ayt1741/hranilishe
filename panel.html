@@ -80,10 +80,14 @@ pre{margin:6px 0 0;white-space:pre-wrap;word-break:break-word;color:#b8c6d8;font
 <script>
 var ВСТРОЕНО = window.__ДАННЫЕ__ || null;
 var ДАННЫЕ = null, СТРАНИЦА = 0, ПО_СТРАНИЦЕ = 20, ЕСТЬ = false;
+/* Порядок источников: 1) raw — отдаётся сразу, без кэша Pages; 2) API — всегда свежий,
+   но 60 запросов в час без ключа, поэтому только если raw не ответил; 3) локальный файл —
+   его кэширует CDN Pages до 15 минут, поэтому он последний.
+   Замер 12.11 14:46: CDN actions.json отдавал 125 записей, raw и API — 128. Разница в 10 минут. */
 var ИСТОЧНИКИ = [
-  function(t){return "actions.json?t="+t},                                                     /* живая панель в Arena — без кэша вообще */
-  function(t){return "https://api.github.com/repos/Ayt1741/hranilishe/contents/actions.json?t="+t}, /* API: всегда свежий */
-  function(t){return "https://raw.githubusercontent.com/Ayt1741/hranilishe/main/actions.json?t="+t} /* запасной */
+  function(t){return "https://raw.githubusercontent.com/Ayt1741/hranilishe/main/actions.json?t="+t},
+  function(t){return "https://api.github.com/repos/Ayt1741/hranilishe/contents/actions.json?t="+t},
+  function(t){return "actions.json?t="+t}
 ];
 function esc(t){return String(t==null?"":t).replace(/[<>&]/g,function(c){return {"<":"&lt;",">":"&gt;","&":"&amp;"}[c]})}
 function зн(v){return v?'<span style="color:#5ee6a0">✓</span>':'<span style="color:#ff7d7d">✗</span>'}
@@ -194,21 +198,18 @@ function взять(к, готово){
 }
 
 function тян(){
-  ЛУЧШЕЕ = null; ЛУЧШИЙ_ИСТ = -1; ЛУЧШИЙ_ВОЗРАСТ = 1e12;
-  var ждём = ИСТОЧНИКИ.length, готово_всех = 0, закончили = false;
+  var ИМЕНА=["raw.githubusercontent","api.github.com (запасной)","файл сайта (кэш CDN)"];
+  var попытка=0, лучший=null, лучший_возраст=1e12, лучший_ист=-1;
 
-  function итог(){
-    if(закончили) return;
-    закончили = true;
-    if(ЛУЧШЕЕ){
-      ЕСТЬ = true;
-      рисовать(ЛУЧШЕЕ);
-      document.getElementById("т").style.background = "5ee6a0";
-      document.getElementById("т").style.background = "#5ee6a0";
-      document.getElementById("жт").textContent = (ЛУЧШИЙ_ИСТ===0?"живая панель":(ЛУЧШИЙ_ИСТ===1?"сайт · данные GitHub API":"сайт · запасной источник"));
-      var ов = document.getElementById("обн");
-      ов.textContent = "данные от "+String(ЛУЧШЕЕ.проверка.опубликовано||"").replace("T"," ")+" · возраст "+ЛУЧШИЙ_ВОЗРАСТ+" с";
-      ов.style.color = ЛУЧШИЙ_ВОЗРАСТ>180?"#ff7d7d":(ЛУЧШИЙ_ВОЗРАСТ>70?"#ffcf6b":"#5ee6a0");
+  function показать(){
+    if(лучший){
+      ЕСТЬ=true; рисовать(лучший);
+      document.getElementById("т").style.background="#5ee6a0";
+      document.getElementById("жт").textContent="источник: "+ИМЕНА[лучший_ист];
+      var ов=document.getElementById("обн");
+      ов.textContent="данные от "+String(лучший.проверка.опубликовано||"").replace("T"," ")+
+                     " · возраст "+лучший_возраст+" с · проверено в "+new Date().toLocaleTimeString("ru-RU");
+      ов.style.color=лучший_возраст>180?"#ff7d7d":(лучший_возраст>70?"#ffcf6b":"#5ee6a0");
       return;
     }
     if(ЕСТЬ){document.getElementById("т").style.background="#ffcf6b";
@@ -219,17 +220,19 @@ function тян(){
     else {document.getElementById("т").style.background="#ff7d7d";document.getElementById("жт").textContent="нет данных";}
   }
 
-  ИСТОЧНИКИ.forEach(function(_, к){
-    взять(к, function(ош, д){
-      готово_всех++;
+  function шаг(){
+    if(попытка>=ИСТОЧНИКИ.length){показать();return}
+    var к=попытка++;
+    взять(к,function(ош,д){
       if(д){
-        var в = возраст(д);
-        if(в < ЛУЧШИЙ_ВОЗРАСТ){ ЛУЧШИЙ_ВОЗРАСТ = в; ЛУЧШЕЕ = д; ЛУЧШИЙ_ИСТ = к; }
+        var в=возраст(д);
+        if(в<лучший_возраст){лучший_возраст=в;лучший=д;лучший_ист=к;}
+        if(в<120){показать();return}   /* свежее двух минут — дальше не ищем */
       }
-      if(готово_всех >= ждём) итог();
-      else if(ЛУЧШЕЕ && ЛУЧШИЙ_ВОЗРАСТ < 30) итог();   /* уже свежайшие — не ждём остальных */
+      шаг();
     });
-  });
+  }
+  шаг();
 }
 
 document.getElementById("обнкн").onclick=function(){тян()};
