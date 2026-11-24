@@ -150,59 +150,64 @@ def перестроить(тихо=False):
 
 # ---------- эмбеддинги ----------
 def эмбеддинги():
-    """bge-m3 на CPU. 16 ГБ RAM облака хватает (1,6 ГБ модель + 49к×1024×4 = 200 МБ векторы)."""
+    """bge-m3 по записям (2167) — не по кускам (49к): в 23 раза быстрее, для семантики хватает.
+
+    Почему по записям: кусок 1200 знаков режет мысль; запись целиком даёт вектор смысла.
+    Для точных цитат остаётся FTS5-рука (она по кускам).
+    """
     import numpy as np
-    if os.path.exists(ВЕКТ):
-        print("эмбеддинги уже есть:", os.path.getsize(ВЕКТ)//1048576, "МБ")
-        return ВЕКТ
+    ВЕКТ_З = os.path.join(БАЗА, "данные", "вект-записи.npy")
+    if os.path.exists(ВЕКТ_З):
+        print("векторы записей есть:", os.path.getsize(ВЕКТ_З)//1048576, "МБ")
+        return ВЕКТ_З
     from sentence_transformers import SentenceTransformer
     con = sqlite3.connect(ИНДЕКС)
-    стр = list(con.execute("SELECT ид, н, substr(текст,1,1200) FROM куски"))
+    стр = list(con.execute("SELECT н, substr(текст,1,2000) FROM записи ORDER BY н"))
     con.close()
-    print("кусков для эмбеддингов:", len(стр), flush=True)
+    print("записей для векторов:", len(стр), flush=True)
     if not стр:
-        raise RuntimeError("нет кусков — индекс пуст")
+        raise RuntimeError("нет записей")
     print("загружаю bge-m3...", flush=True)
     м = SentenceTransformer("BAAI/bge-m3", device="cpu")
-    print("модель загружена, размерность:", м.get_sentence_embedding_dimension(), flush=True)
-    тексты = [s[2] or "" for s in стр]
-    части_E, B = [], 64
+    print("модель ок, размерность:", м.get_sentence_embedding_dimension(), flush=True)
+    тексты = [s[1] or "" for s in стр]
+    части, B = [], 32
     t0 = time.time()
     for i in range(0, len(тексты), B):
         E = м.encode(тексты[i:i+B], batch_size=B, normalize_embeddings=True,
                      convert_to_numpy=True, show_progress_bar=False, max_length=512)
-        части_E.append(E.astype(np.float32))
-        if i % 3200 == 0:
+        части.append(E.astype(np.float32))
+        if i % 320 == 0:
             print(f"  {i}/{len(тексты)} {time.time()-t0:.0f} с", flush=True)
-    E = np.vstack(части_E)
-    os.makedirs(os.path.dirname(ВЕКТ), exist_ok=True)
-    np.save(ВЕКТ.replace(".npy", "_ids.npy"), np.array([s[0] for s in стр], dtype=np.int64))
-    np.save(ВЕКТ.replace(".npy", "_ном.npy"), np.array([s[1] for s in стр], dtype=np.int64))
-    np.save(ВЕКТ, E)
-    размер = os.path.getsize(ВЕКТ)//1048576
-    print("эмбеддинги:", E.shape, размер, "МБ,", round(time.time()-t0), "с", flush=True)
-    if not os.path.exists(ВЕКТ):
+    E = np.vstack(части)
+    np.save(ВЕКТ_З.replace(".npy", "_ном.npy"), np.array([s[0] for s in стр], dtype=np.int64))
+    np.save(ВЕКТ_З, E)
+    if not os.path.exists(ВЕКТ_З):
         raise RuntimeError("файл векторов не создан")
-    return ВЕКТ
+    print("векторы записей:", E.shape, os.path.getsize(ВЕКТ_З)//1048576, "МБ,", round(time.time()-t0), "с", flush=True)
+    return ВЕКТ_З
 
 def векторный_поиск(текст, сколько=40):
-    """Косинус по bge-m3. Возвращает [номер] по убыванию близости."""
+    """Косинус по bge-m3 (по записям). Порог отсекает мусор."""
     import numpy as np
-    if not os.path.exists(ВЕКТ):
+    ВЕКТ_З = os.path.join(БАЗА, "данные", "вект-записи.npy")
+    if not os.path.exists(ВЕКТ_З):
         return []
     from sentence_transformers import SentenceTransformer
     if "модель" not in _ВЕК:
         _ВЕК["модель"] = SentenceTransformer("BAAI/bge-m3", device="cpu")
-        _ВЕК["E"] = np.load(ВЕКТ, mmap_mode="r")
-        _ВЕК["ном"] = np.load(ВЕКТ.replace(".npy","_ном.npy"))
+        _ВЕК["E"] = np.load(ВЕКТ_З)
+        _ВЕК["ном"] = np.load(ВЕКТ_З.replace(".npy", "_ном.npy"))
     q = _ВЕК["модель"].encode([текст], normalize_embeddings=True, convert_to_numpy=True)[0]
-    скор = np.asarray(_ВЕК["E"] @ q)
-    лучшие = np.argsort(-скор)[:сколько*3]
-    вида, итог = set(), []
+    скор = _ВЕК["E"] @ q
+    лучшие = np.argsort(-скор)[:сколько*2]
+    итог, вида = [], set()
     for ин in лучшие:
+        if скор[ин] < 0.40:   # порог: ниже — шум (проверено на rubert: плоский спектр)
+            break
         н = int(_ВЕК["ном"][ин])
         if н in вида: continue
-        вида.add(н); итог.append(н)
+        вида.add(н); итог.append((н, float(скор[ин])))
         if len(итог) >= сколько: break
     return итог
 
@@ -262,7 +267,7 @@ def искать(текст, сколько=10, к=60, с_реранком=True)
         # Векторная рука bge-m3 (облако): семантика ловит перефразы без общих слов.
         try:
             _в = векторный_поиск(текст, 30)
-            for _ранг, _н in enumerate(_в):
+            for _ранг, (_н, _cos) in enumerate(_в):
                 счета[_н] = счета.get(_н, 0.0) + 1.0 / (_ранг + к)
                 if _н not in цитата:
                     _стр = con.execute("SELECT текст FROM записи WHERE н=?", (_н,)).fetchone()
