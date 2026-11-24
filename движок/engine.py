@@ -162,17 +162,17 @@ def эмбеддинги():
         return ВЕКТ_З
     from sentence_transformers import SentenceTransformer
     con = sqlite3.connect(ИНДЕКС)
-    стр = list(con.execute("SELECT н, substr(текст,1,2000) FROM записи ORDER BY н"))
+    стр = list(con.execute("SELECT н, substr(текст,1,1200) FROM записи ORDER BY н"))
     con.close()
     print("записей для векторов:", len(стр), flush=True)
     if not стр:
         raise RuntimeError("нет записей")
     print("загружаю bge-m3...", flush=True)
     м = SentenceTransformer("BAAI/bge-m3", device="cpu")
-    м.max_seq_length = 512     # ограничение длины здесь, не в encode()
+    м.max_seq_length = 256     # 256 хватает для смысла записи; 512 — вдвое медленнее
     print("модель ок, размерность:", м.get_sentence_embedding_dimension(), flush=True)
     тексты = [s[1] or "" for s in стр]
-    части, B = [], 32
+    части, B = [], 64
     t0 = time.time()
     for i in range(0, len(тексты), B):
         # ВАЖНО: в sentence-transformers 5.x max_length в encode() не принимается —
@@ -180,7 +180,7 @@ def эмбеддинги():
         E = м.encode(тексты[i:i+B], batch_size=B, normalize_embeddings=True,
                      convert_to_numpy=True, show_progress_bar=False)
         части.append(E.astype(np.float32))
-        if i % 320 == 0:
+        if i % 640 == 0:
             print(f"  {i}/{len(тексты)} {time.time()-t0:.0f} с", flush=True)
     E = np.vstack(части)
     np.save(ВЕКТ_З.replace(".npy", "_ном.npy"), np.array([s[0] for s in стр], dtype=np.int64))
@@ -199,7 +199,7 @@ def векторный_поиск(текст, сколько=40):
     from sentence_transformers import SentenceTransformer
     if "модель" not in _ВЕК:
         _ВЕК["модель"] = SentenceTransformer("BAAI/bge-m3", device="cpu")
-        _ВЕК["модель"].max_seq_length = 512
+        _ВЕК["модель"].max_seq_length = 256
         _ВЕК["E"] = np.load(ВЕКТ_З)
         _ВЕК["ном"] = np.load(ВЕКТ_З.replace(".npy", "_ном.npy"))
     q = _ВЕК["модель"].encode([текст], normalize_embeddings=True, convert_to_numpy=True)[0]
@@ -357,6 +357,15 @@ if __name__ == "__main__":
     elif что == "search":
         print(json.dumps(искать(" ".join(sys.argv[2:]) or "поиск", 5), ensure_ascii=False, indent=1))
     elif что == "eval":
-        наборы = json.load(open(os.path.join(БАЗА, "наборы.json"), encoding="utf-8"))
-        for имя, набор in наборы.items():
-            замер([(a, b) for a, b in набор], имя)
+        н = json.load(open(os.path.join(БАЗА, "наборы.json"), encoding="utf-8"))
+        пары = [(п["вопрос"], п["ответ"]) for п in н] if isinstance(н, list) else []
+        print("пар в наборе:", len(пары), flush=True)
+        замер(пары, "реальные-вопросы-6")
+    elif что == "eval-все":
+        # сравнение с векторами и без
+        н = json.load(open(os.path.join(БАЗА, "наборы.json"), encoding="utf-8"))
+        пары = [(п["вопрос"], п["ответ"]) for п in н] if isinstance(н, list) else []
+        print("--- без векторов ---", flush=True)
+        замер(пары, "без векторов")
+        print("--- с векторами bge-m3 ---", flush=True)
+        замер(пары, "с векторами")
