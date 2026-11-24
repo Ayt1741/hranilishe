@@ -500,6 +500,13 @@ if __name__ == "__main__":
         склеить_шарды()
     elif что == "search":
         print(json.dumps(искать(" ".join(sys.argv[2:]) or "поиск", 5), ensure_ascii=False, indent=1))
+    elif что == "eval-перефразы":
+        import glob
+        файл = os.path.join(БАЗА, "перефразы.json")
+        н = json.load(open(файл, encoding="utf-8"))
+        пары = [(п["вопрос"], п["ответ"]) for п in н]
+        print("перефразов:", len(пары), flush=True)
+        замер(пары, "перефразы")
     elif что == "eval":
         н = json.load(open(os.path.join(БАЗА, "наборы.json"), encoding="utf-8"))
         пары = [(п["вопрос"], п["ответ"]) for п in н] if isinstance(н, list) else []
