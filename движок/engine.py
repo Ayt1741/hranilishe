@@ -13,6 +13,7 @@
   RusBEIR: BM25 36,7 → BGE-M3 57,9 → +реранк 69,1 nDCG@10.
 """
 import os, sys, json, gzip, re, sqlite3, hashlib, time, subprocess
+import urllib.request, urllib.parse
 
 БАЗА = os.path.dirname(os.path.abspath(__file__))
 ЖУРНАЛ = os.path.join(БАЗА, "данные", "журнал.jsonl.gz")
@@ -31,7 +32,6 @@ import os, sys, json, gzip, re, sqlite3, hashlib, time, subprocess
 # ---------- данные ----------
 def скачать_журнал():
     """Скачивает части журнала из hranilishe и склеивает. Готовый код GitHub API."""
-    import urllib.request
     ток = os.environ.get("GITHUB_TOKEN", "")
     os.makedirs(os.path.dirname(ЖУРНАЛ), exist_ok=True)
     if os.path.exists(ЖУРНАЛ) and os.path.getsize(ЖУРНАЛ) > 1_000_000:
@@ -41,7 +41,11 @@ def скачать_журнал():
     for имя in ["журнал.jsonl.gz.часть1", "журнал.jsonl.gz.часть2"]:
         url = ("https://raw.githubusercontent.com/Ayt1741/hranilishe/main/"
                + urllib.parse.quote("журнал/" + имя))
-        req = urllib.request.Request(url, headers={"User-Agent": "arena", "Authorization": f"Bearer {ток}"})
+        # ВАЖНО: raw.githubusercontent отдаёт 404, если передать пустой Bearer.
+        заголовки = {"User-Agent": "arena"}
+        if ток:
+            заголовки["Authorization"] = f"Bearer {ток}"   # только для приватных
+        req = urllib.request.Request(url, headers=заголовки)
         данные = urllib.request.urlopen(req, timeout=120).read()
         части.append(данные)
         print(имя, len(данные) // 1024, "КБ")
@@ -156,7 +160,8 @@ def эмбеддинги():
     стр = list(con.execute("SELECT ид, н, substr(текст,1,1500) FROM куски"))
     con.close()
     print("кусков для эмбеддингов:", len(стр), flush=True)
-    м = SentenceTransformer("BAAI/bge-m3", device="cpu")
+    print("загружаю bge-m3...", flush=True)
+    м = SentenceTransformer("BAAI/bge-m3", device="cpu", trust_remote_code=True)
     тексты = [s[2] or "" for s in стр]
     E = м.encode(тексты, batch_size=32, normalize_embeddings=True, show_progress_bar=True,
                  convert_to_numpy=True, max_length=512)
@@ -276,9 +281,18 @@ def замер(набор, метка):
     return mrr, хиты
 
 if __name__ == "__main__":
+    import traceback
     что = sys.argv[1] if len(sys.argv) > 1 else "build"
     if что == "build":
-        скачать_журнал(); перестроить(); эмбеддинги()
+        try:
+            print("> скачивание журнала", flush=True); скачать_журнал()
+            print("> построение индекса", flush=True); перестроить()
+            print("> эмбеддинги", flush=True); эмбеддинги()
+            print("> ГОТОВО", flush=True)
+        except Exception:
+            print("!!! ОШИБКА:", flush=True)
+            traceback.print_exc()
+            sys.exit(1)
     elif что == "search":
         print(json.dumps(искать(" ".join(sys.argv[2:]) or "поиск", 5), ensure_ascii=False, indent=1))
     elif что == "eval":
