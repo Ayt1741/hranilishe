@@ -380,6 +380,46 @@ def пересчитать_векторы(батч=32, каждые=200, при�
           f"{time.time()-t0:.0f} с", flush=True)
     return len(готово)
 
+
+def пересчитать_векторы_torch(модель="intfloat/multilingual-e5-large", батч=16, префиксы=True):
+    """Пересчёт векторов ЛУЧШЕЙ моделью под русский (torch, только в облаке 16 ГБ).
+
+    Зачем: bge-m3 — хорошая, но не лучшая на русском. multilingual-e5-large по MTEB
+    обгоняет её на multilingual-ретриве; у e5 ОБЯЗАТЕЛЬНЫ префиксы "query: " и
+    "passage: " — без них качество падает (это требование модели, не эвристика).
+    Замер ONNX-пересчёта bge был хуже torch — значит модель важна, и сравнивать
+    надо именно модели, а не способы счёта.
+    """
+    import numpy as np
+    from sentence_transformers import SentenceTransformer
+    con = sqlite3.connect(ИНДЕКС)
+    стр = list(con.execute("SELECT н, текст FROM записи ORDER BY н"))
+    con.close()
+    if not стр:
+        raise RuntimeError("нет записей — сначала перестроить()")
+    print("модель:", модель, "| записей:", len(стр), flush=True)
+    м = SentenceTransformer(модель, device="cpu")
+    м.max_seq_length = 512          # e5 обучен на 512 токенах
+    тексты = [(("passage: " if префиксы else "") + (с or "")[:1500]) for _, с in стр]
+    части, t0 = [], time.time()
+    for i in range(0, len(тексты), батч):
+        Е = м.encode(тексты[i:i+батч], batch_size=батч, normalize_embeddings=True,
+                     convert_to_numpy=True, show_progress_bar=False)
+        части.append(Е.astype(np.float32))
+        if (i // батч) % 10 == 0:
+            print(f"  {min(i+батч, len(тексты))}/{len(тексты)}  {time.time()-t0:.0f} с", flush=True)
+    Е = np.vstack(части)
+    Ф = os.path.join(БАЗА, "данные", "вект-записи.npy")
+    np.save(Ф, Е)
+    np.save(Ф.replace(".npy", "_ном.npy"), np.array([н for н, _ in стр], dtype=np.int64))
+    print("готово:", Е.shape, os.path.getsize(Ф)//1048576, "МБ,", round(time.time()-t0), "с", flush=True)
+    return len(стр)
+
+
+def модель_эмбеддинга():
+    """Какая модель сейчас используется для ЗАПРОСОВ (должна совпадать с векторами)."""
+    return os.environ.get("ВЕКТ_МОДЕЛЬ_ИМЯ", "bge-m3")
+
 def склеить_шарды():
     """Собирает шарды в вект-записи.npy (+ float32 для быстрого косинуса)."""
     import numpy as np, glob
