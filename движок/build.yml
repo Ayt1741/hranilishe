@@ -1,6 +1,4 @@
 name: memory-engine-build
-# Сборка поиска по памяти в облаке: 16 ГБ RAM, 4 CPU (ubuntu-latest).
-# Зачем облако: песочница агента 2 ГБ не тянет bge-m3 — тут тянет (1,6 ГБ RAM, 0 VRAM).
 on:
   workflow_dispatch:
     inputs:
@@ -9,7 +7,7 @@ on:
         required: false
         default: "build"
       query:
-        description: "текст запроса (для step=search)"
+        description: "запрос (для step=search)"
         required: false
         default: ""
 
@@ -34,63 +32,133 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Память и FTS5
-        run: |
-          free -m | head -2
-          python -c "import sqlite3; c=sqlite3.connect(':memory:'); c.execute('CREATE VIRTUAL TABLE t USING fts5(x)'); print('FTS5 есть')"
-
       - name: Зависимости
         run: |
           pip install --quiet --upgrade pip
           pip install --quiet onnxruntime==1.19.2 transformers sentence-transformers pymorphy3 numpy
+          python -c "import sqlite3; c=sqlite3.connect(':memory:'); c.execute('CREATE VIRTUAL TABLE t USING fts5(x)'); print('FTS5 ок')"
+          free -m | head -2
 
-      - name: Скачать движок из hranilishe
+      - name: Скачать движок
         run: |
           mkdir -p движок
           curl -sSL -o движок/engine.py "https://raw.githubusercontent.com/Ayt1741/hranilishe/main/%D0%B4%D0%B2%D0%B8%D0%B6%D0%BE%D0%BA/engine.py"
           wc -l движок/engine.py
 
-      - name: Скачать реранкер (376 МБ int8)
+      - name: Скачать реранкер
         run: |
           python - <<'PY'
           from huggingface_hub import snapshot_download
           snapshot_download("metalmon80/bge-reranker-v2-m3-en-ru-onnx", local_dir="движок/модели/реранк",
                             allow_patterns=["model.int8.onnx","tokenizer.json","config.json",
                                             "tokenizer_config.json","special_tokens_map.json","vocab.txt","*.model"])
-          print("реранк скачан")
+          print("реранк ок")
           PY
 
-      - name: Сборка индекса и эмбеддингов
+      - name: Шаг A — журнал и индекс
+        run: |
+          cd движок
+          python - 2>&1 <<'PY' | tee /tmp/a.log
+          import importlib.util, traceback, sys
+          spec = importlib.util.spec_from_file_location("eng", "engine.py")
+          E = importlib.util.module_from_spec(spec); spec.loader.exec_module(E)
+          try:
+              print("> журнал", flush=True); E.скачать_журнал()
+              print("> индекс", flush=True); E.перестроить()
+              print("> A ГОТОВО", flush=True)
+          except Exception:
+              traceback.print_exc()
+              print("::error title=A failed::" + repr(sys.exc_info()[1])[:300])
+              sys.exit(1)
+          PY
+
+      - name: Шаг B — эмбеддинги bge-m3
         if: github.event.inputs.step != 'search'
         run: |
-          cd движок && python engine.py build
-          ls -la данные/ | head -20
-          du -sh данные/* 2>/dev/null
-
-      - name: Замер MRR
-        if: github.event.inputs.step == 'eval'
-        run: cd движок && python engine.py eval
-
-      - name: Поиск
-        if: github.event.inputs.step == 'search'
-        run: |
-          cd движок && python engine.py build
-          python engine.py search "${{ github.event.inputs.query }}"
+          cd движок
+          python - 2>&1 <<'PY' | tee /tmp/b.log
+          import importlib.util, traceback, sys, os, glob
+          spec = importlib.util.spec_from_file_location("eng", "engine.py")
+          E = importlib.util.module_from_spec(spec); spec.loader.exec_module(E)
+          try:
+              print("> эмбеддинги", flush=True); E.эмбеддинги()
+              файлы = glob.glob("данные/вект-записи*.npy")
+              print("> файлы векторов:", файлы, flush=True)
+              if not файлы:
+                  raise RuntimeError("вект-записи.npy не создан")
+              print("> B ГОТОВО", flush=True)
+          except Exception:
+              traceback.print_exc()
+              print("::error title=B failed::" + repr(sys.exc_info()[1])[:300])
+              sys.exit(1)
+          PY
 
       - name: Итог
         if: always()
         run: |
-          echo "=== состояние ==="
+          echo "=== файлы ==="
+          ls -la движок/данные/ 2>/dev/null || echo "нет данных"
+          du -sh движок/данные/* 2>/dev/null
+          echo "=== хвост A ==="
+          tail -30 /tmp/a.log 2>/dev/null || true
+          echo "=== хвост B ==="
+          tail -30 /tmp/b.log 2>/dev/null || true
           free -m | head -2
-          ls -la движок/данные/ 2>/dev/null || echo "данных нет"
 
-      - name: Отдать результат
+      - name: Опубликовать в hranilishe
+        if: always()
+        env:
+          PAT: ${{ secrets.HRANILISHE_PAT }}
+        run: |
+          cd движок
+          ls -la данные/ 2>/dev/null || exit 0
+          python - <<'PY'
+          import os, json, base64, urllib.request, urllib.parse, hashlib
+          пат = os.environ.get("PAT","")
+          if not пат:
+              print("::warning title=нет PAT::секрет HRANILISHE_PAT не задан — результат остался в артефакте")
+              raise SystemExit(0)
+          def put(путь, файл, сообщение):
+              данные = open(файл,"rb").read()
+              if len(данные) > 45*1024*1024:
+                  print("слишком большой для contents API:", файл, len(данные)//1048576, "МБ"); return
+              импорт = urllib.parse.quote(путь)
+              req = urllib.request.Request(f"https://api.github.com/repos/Ayt1741/hranilishe/contents/{импорт}",
+                  headers={"Authorization":f"Bearer {пат}","User-Agent":"arena","Accept":"application/vnd.github+json"})
+              ша = None
+              try:
+                  d = json.loads(urllib.request.urlopen(req, timeout=60).read()); ша = d.get("sha")
+              except Exception: pass
+              тело = {"message": сообщение, "content": base64.b64encode(данные).decode()}
+              if ша: тело["sha"] = ша
+              req2 = urllib.request.Request(f"https://api.github.com/repos/Ayt1741/hranilishe/contents/{импорт}",
+                  method="PUT", data=json.dumps(тело).encode(),
+                  headers={"Authorization":f"Bearer {пат}","User-Agent":"arena","Accept":"application/vnd.github+json","Content-Type":"application/json"})
+              try:
+                  r = json.loads(urllib.request.urlopen(req2, timeout=300).read())
+                  print("залито:", путь, (r.get("commit") or {}).get("sha","")[:8])
+              except Exception as e:
+                  print("::warning title=заливка::" + путь + " — " + str(e)[:120])
+          import glob
+          for ф in glob.glob("данные/*.npy") + glob.glob("данные/*.db"):
+              put("движок/результат/" + os.path.basename(ф), ф, "результат облачной сборки")
+          # отчёт о сборке
+          отчёт = {"прогон": os.environ.get("GITHUB_RUN_ID"), "файлы": []}
+          for ф in glob.glob("данные/*"):
+              отчёт["файлы"].append({"имя": os.path.basename(ф), "байт": os.path.getsize(ф)})
+          open("/tmp/отчёт.json","w").write(json.dumps(отчёт, ensure_ascii=False, indent=1))
+          put("движок/результат/отчёт.json", "/tmp/отчёт.json", "отчёт о сборке")
+          print(json.dumps(отчёт, ensure_ascii=False, indent=1))
+          PY
+
+      - name: Отдать в артефакт
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: memory-engine-result
           path: |
-            движок/данные/*.db
-            движок/данные/*.npy
+            движок/данные/вект-записи*.npy
+            /tmp/a.log
+            /tmp/b.log
           retention-days: 14
           if-no-files-found: warn
