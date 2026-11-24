@@ -29,6 +29,73 @@ import urllib.request, urllib.parse
 нас про всего них какая много разве три эту моя впрочем хорошо свою этой перед иногда лучше
 чуть том нельзя такой им более всегда конечно всю между""".split())
 
+
+# ---------- модели: где лежат и как восстановить ----------
+# ВАЖНО (ограничение снапшота): воркспейс сохраняется только до ~128 МБ,
+# поэтому модели (933 МБ) лежат в .cache — он НЕ попадает в снапшот,
+# но живёт на диске весь сеанс. Если пропали — восстанавливаем из ModelScope/HF.
+МОДЕЛИ = os.environ.get("ПФ_МОДЕЛИ") or os.path.join(os.path.dirname(БАЗА), ".cache", "модели")
+
+НУЖНЫЕ = {
+    "bge-m3-onnx": {
+        "база": "https://huggingface.co/Xenova/bge-m3/resolve/main/",
+        "файлы": {"onnx/model_int8.onnx": ("model_int8.onnx", 500_000_000),
+                  "tokenizer.json": ("tokenizer.json", 10_000_000),
+                  "tokenizer_config.json": ("tokenizer_config.json", 100),
+                  "config.json": ("config.json", 100)},
+        "ещё": [("https://huggingface.co/BAAI/bge-m3/resolve/main/sentencepiece.bpe.model",
+                 "sentencepiece.bpe.model", 4_000_000)],
+    },
+    "реранк": {
+        "база": "https://huggingface.co/metalmon80/bge-reranker-v2-m3-en-ru-onnx/resolve/main/",
+        "файлы": {"model.int8.onnx": ("model.int8.onnx", 300_000_000),
+                  "tokenizer.json": ("tokenizer.json", 1_000_000),
+                  "tokenizer_config.json": ("tokenizer_config.json", 100),
+                  "config.json": ("config.json", 100)},
+        "ещё": [("https://huggingface.co/BAAI/bge-reranker-v2-m3/resolve/main/sentencepiece.bpe.model",
+                 "sentencepiece.bpe.model", 4_000_000)],
+    },
+}
+
+def модель_есть(имя):
+    п = os.path.join(МОДЕЛИ, имя)
+    for _, (файл, минимум) in НУЖНЫЕ[имя]["файлы"].items():
+        ф = os.path.join(п, файл)
+        if not os.path.exists(ф) or os.path.getsize(ф) < минимум:
+            return False
+    return True
+
+def восстановить_модель(имя):
+    """Качает модель, если её нет. Идемпотентно, с проверкой размера."""
+    if модель_есть(имя):
+        return os.path.join(МОДЕЛИ, имя)
+    опис = НУЖНЫЕ[имя]
+    п = os.path.join(МОДЕЛИ, имя)
+    os.makedirs(п, exist_ok=True)
+    print(f"восстанавливаю модель {имя} → {п}", flush=True)
+    for путь, (файл, минимум) in опис["файлы"].items():
+        куда = os.path.join(п, файл)
+        if os.path.exists(куда) and os.path.getsize(куда) >= минимум:
+            continue
+        req = urllib.request.Request(опис["база"] + путь, headers={"User-Agent": "arena"})
+        данные = urllib.request.urlopen(req, timeout=1800).read()
+        if len(данные) < минимум:
+            raise RuntimeError(f"{файл}: {len(данные)} байт, ждали ≥{минимум}")
+        open(куда, "wb").write(данные)
+        print(f"  {файл}: {len(данные)//1048576} МБ", flush=True)
+    for url, файл, минимум in опис.get("ещё", []):
+        куда = os.path.join(п, файл)
+        if os.path.exists(куда) and os.path.getsize(куда) >= минимум:
+            continue
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "arena"})
+            данные = urllib.request.urlopen(req, timeout=600).read()
+            open(куда, "wb").write(данные)
+            print(f"  {файл}: {len(данные)//1048576} МБ", flush=True)
+        except Exception as e:
+            print(f"  {файл}: не скачался ({str(e)[:60]}) — не критично", flush=True)
+    return п
+
 # ---------- данные ----------
 def скачать_журнал():
     """Скачивает части журнала из hranilishe и склеивает. Готовый код GitHub API."""
@@ -256,8 +323,9 @@ def вектор_запроса(текст):
     Берём CLS-токен и нормируем — так же, как sentence-transformers."""
     import onnxruntime as ort, numpy as np
     from transformers import AutoTokenizer
-    м = os.environ.get("ВЕКТ_МОДЕЛЬ", os.path.join(БАЗА, "модели", "bge-m3-onnx"))
+    м = os.environ.get("ВЕКТ_МОДЕЛЬ", os.path.join(МОДЕЛИ, "bge-m3-onnx"))
     if "сесс" not in _ВЕК:
+        м = восстановить_модель("bge-m3-onnx")   # если .cache очистился — скачает заново
         # На раннере GitHub tokenizer.json от Xenova не парсится («Couldn't instantiate the
         # backend tokenizer»), поэтому есть фолбэк: sentencepiece напрямую + ручная сборка
         # input_ids по схеме XLM-R (<s> … </s>), ровно как делает AutoTokenizer.
@@ -339,7 +407,20 @@ def x_не_сосед(н, порядок):
     """True, если н не является чьим-то «соседом» в выдаче (можно вытеснять)."""
     return (н - 1) not in порядок
 
-def искать(текст, сколько=10, к=60, с_реранком=True):
+def доступно_мб():
+    """Сколько RAM реально доступно. Замер: bge-m3 ONNX 851 МБ + реранкер 600 МБ
+    не влезают в 1,9 ГБ песочницы (OOM, код 137), но свободно живут в 16 ГБ облака."""
+    try:
+        with open("/proc/meminfo") as f:
+            инфо = {стр.split(":")[0]: int(стр.split()[1]) // 1024 for стр in f if ":" in стр}
+        return инфо.get("MemAvailable", инфо.get("MemTotal", 0))
+    except Exception:
+        return 16000
+
+def искать(текст, сколько=10, к=60, с_реранком=None):
+    if с_реранком is None:
+        # авто: хватает RAM — реранкер включается, иначе он сам себя выгрузит
+        с_реранком = доступно_мб() >= 3500
     """Гибрид: FTS5 + LIKE + леммы + векторы bge-m3, скоры нормированы по рукам.
 
     Веса: смысл 0,45 | точные слова 0,30 | подстроки 0,15 | леммы 0,10.
@@ -462,17 +543,43 @@ def реранк(текст, кандидаты):
         import onnxruntime as ort
         from transformers import AutoTokenizer
         import numpy as np
-        м = os.environ.get("РЕРАНК_МОДЕЛЬ", os.path.join(БАЗА, "модели", "реранк"))
+        м = os.environ.get("РЕРАНК_МОДЕЛЬ", os.path.join(МОДЕЛИ, "реранк"))
         if "сесс" not in _РЕР:
-            if not os.path.exists(os.path.join(м, "model.int8.onnx")):
-                return None
-            _РЕР["ток"] = AutoTokenizer.from_pretrained(м)
+            # RAM 1,9 ГБ: две ONNX-модели сразу не влезают (был OOM, код 137).
+            # Выгружаем векторы перед загрузкой реранкера — освобождает ~900 МБ.
+            if _ВЕК:
+                print("выгружаю bge-m3, чтобы освободить RAM под реранкер", flush=True)
+                _ВЕК.clear()
+            import gc; gc.collect()
+            # раньше здесь молча возвращался None — реранкер не работал вовсе.
+            м = восстановить_модель("реранк")
+            try:
+                _РЕР["ток"] = AutoTokenizer.from_pretrained(м)
+                _РЕР["режим"] = "auto"
+            except Exception:
+                import sentencepiece as spm
+                _РЕР["sp"] = spm.SentencePieceProcessor(model_file=os.path.join(м, "sentencepiece.bpe.model"))
+                _РЕР["режим"] = "sp"
             о = ort.SessionOptions(); о.intra_op_num_threads = 4; о.inter_op_num_threads = 1
             _РЕР["сесс"] = ort.InferenceSession(os.path.join(м, "model.int8.onnx"), sess_options=о,
                                                 providers=["CPUExecutionProvider"])
         пары = [(текст, (т or "")[:2000]) for _, т in кандидаты]
-        enc = _РЕР["ток"](*zip(*пары), padding=True, truncation=True, max_length=512, return_tensors="np")
-        скоры = _РЕР["сесс"].run(None, {k: enc[k] for k in enc})[0].flatten()
+        if _РЕР.get("режим") == "sp":
+            # ручная сборка пары «запрос </s> </s> документ </s>» как в bge-reranker
+            sp = _РЕР["sp"]
+            иды, маски = [], []
+            for а, б in пары:
+                ид = [0] + sp.encode(а, out_type=int)[:250] + [2, 2] + sp.encode(б, out_type=int)[:250] + [2]
+                ид = ид[:512]
+                иды.append(ид); маски.append([1] * len(ид))
+            макс = max(len(x) for x in иды)
+            иды = [x + [1] * (макс - len(x)) for x in иды]
+            маски = [x + [0] * (макс - len(x)) for x in маски]
+        else:
+            enc = _РЕР["ток"](*zip(*пары), padding=True, truncation=True, max_length=512, return_tensors="np")
+            иды, маски = enc["input_ids"], enc["attention_mask"]
+        скоры = _РЕР["сесс"].run(None, {"input_ids": np.array(иды, dtype=np.int64),
+                                        "attention_mask": np.array(маски, dtype=np.int64)})[0].flatten()
         return [н for (н, _), _с in sorted(zip(кандидаты, скоры), key=lambda x: -x[1])]
     except Exception as e:
         print("реранк недоступен:", str(e)[:80])
