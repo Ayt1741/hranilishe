@@ -149,46 +149,75 @@ def перестроить(тихо=False):
     return н_записей, кусков
 
 # ---------- эмбеддинги ----------
-def эмбеддинги():
-    """bge-m3 по записям (2167) — не по кускам (49к): в 23 раза быстрее, для семантики хватает.
+def эмбеддинги(шард=0, всего=1, квантовать=True):
+    """bge-m3 по записям, ШАРДИРОВАННО: каждая джоба флота берёт свои 1/всего.
 
-    Почему по записям: кусок 1200 знаков режет мысль; запись целиком даёт вектор смысла.
-    Для точных цитат остаётся FTS5-рука (она по кускам).
+    Почему шарды: bge-m3 FP32 на 4 ядрах GitHub ~6 с/запись → 2167 записей > 3 ч,
+    а лимит джобы 90 мин (прогон #8 отменён на 49-й минуте). 8 джоб × 271 запись
+    = 6–9 мин на джобу, параллельно. Файлы: вект-записи.шард{N}.npy + _ном.
+    Квантование: храним float16 (вдвое меньше), косинус считается во float32.
     """
     import numpy as np
-    ВЕКТ_З = os.path.join(БАЗА, "данные", "вект-записи.npy")
-    if os.path.exists(ВЕКТ_З):
-        print("векторы записей есть:", os.path.getsize(ВЕКТ_З)//1048576, "МБ")
-        return ВЕКТ_З
+    os.makedirs(os.path.join(БАЗА, "данные"), exist_ok=True)
+    if всего > 1:
+        ВЕКТ_Ш = os.path.join(БАЗА, "данные", f"вект-записи.шард{шард}.npy")
+    else:
+        ВЕКТ_Ш = os.path.join(БАЗА, "данные", "вект-записи.npy")
+    if os.path.exists(ВЕКТ_Ш):
+        print("шард уже есть:", os.path.getsize(ВЕКТ_Ш)//1048576, "МБ")
+        return ВЕКТ_Ш
     from sentence_transformers import SentenceTransformer
     con = sqlite3.connect(ИНДЕКС)
-    стр = list(con.execute("SELECT н, substr(текст,1,1200) FROM записи ORDER BY н"))
+    стр = list(con.execute("SELECT н, substr(текст,1,1000) FROM записи ORDER BY н"))
     con.close()
-    print("записей для векторов:", len(стр), flush=True)
+    print("записей всего:", len(стр), "| мой шард:", шард, "из", всего, flush=True)
     if not стр:
         raise RuntimeError("нет записей")
+    if всего > 1:
+        стр = [с for i, с in enumerate(стр) if i % всего == шард]
+    print("записей в шарде:", len(стр), flush=True)
+    if not стр:
+        np.save(ВЕКТ_Ш, np.zeros((0, 1024), dtype=np.float16))
+        np.save(ВЕКТ_Ш.replace(".npy", "_ном.npy"), np.array([], dtype=np.int64))
+        return ВЕКТ_Ш
     print("загружаю bge-m3...", flush=True)
+    t0 = time.time()
     м = SentenceTransformer("BAAI/bge-m3", device="cpu")
-    м.max_seq_length = 256     # 256 хватает для смысла записи; 512 — вдвое медленнее
+    м.max_seq_length = 192          # 192 токена ≈ 700 знаков — смысл записи влезает
     print("модель ок, размерность:", м.get_sentence_embedding_dimension(), flush=True)
     тексты = [s[1] or "" for s in стр]
-    части, B = [], 64
-    t0 = time.time()
+    части, B = [], 16
     for i in range(0, len(тексты), B):
-        # ВАЖНО: в sentence-transformers 5.x max_length в encode() не принимается —
-        # задаём через модель, иначе ValueError «additional keyword arguments».
         E = м.encode(тексты[i:i+B], batch_size=B, normalize_embeddings=True,
                      convert_to_numpy=True, show_progress_bar=False)
-        части.append(E.astype(np.float32))
-        if i % 640 == 0:
-            print(f"  {i}/{len(тексты)} {time.time()-t0:.0f} с", flush=True)
+        части.append(E.astype(np.float16))       # float16: вдвое меньше файл
+        print(f"  {min(i+B, len(тексты))}/{len(тексты)}  {time.time()-t0:.0f} с", flush=True)
     E = np.vstack(части)
-    np.save(ВЕКТ_З.replace(".npy", "_ном.npy"), np.array([s[0] for s in стр], dtype=np.int64))
-    np.save(ВЕКТ_З, E)
-    if not os.path.exists(ВЕКТ_З):
-        raise RuntimeError("файл векторов не создан")
-    print("векторы записей:", E.shape, os.path.getsize(ВЕКТ_З)//1048576, "МБ,", round(time.time()-t0), "с", flush=True)
-    return ВЕКТ_З
+    np.save(ВЕКТ_Ш.replace(".npy", "_ном.npy"), np.array([s[0] for s in стр], dtype=np.int64))
+    np.save(ВЕКТ_Ш, E)
+    print("шард готов:", E.shape, os.path.getsize(ВЕКТ_Ш)//1048576, "МБ,", round(time.time()-t0), "с", flush=True)
+    return ВЕКТ_Ш
+
+def склеить_шарды():
+    """Собирает шарды в вект-записи.npy (+ float32 для быстрого косинуса)."""
+    import numpy as np, glob
+    файлы = sorted(glob.glob(os.path.join(БАЗА, "данные", "вект-записи.шард*.npy")))
+    if not файлы:
+        raise RuntimeError("шардов нет")
+    Es, нs = [], []
+    for ф in файлы:
+        если_пусто = os.path.getsize(ф) < 200
+        E = np.load(ф); ном = np.load(ф.replace(".npy", "_ном.npy"))
+        if E.size and ном.size:
+            Es.append(E); нs.append(ном)
+    E = np.vstack(Es).astype(np.float32)
+    ном = np.concatenate(нs)
+    порядок = np.argsort(ном)
+    E, ном = E[порядок], ном[порядок]
+    np.save(os.path.join(БАЗА, "данные", "вект-записи.npy"), E)
+    np.save(os.path.join(БАЗА, "данные", "вект-записи_ном.npy"), ном)
+    print("склеено:", E.shape, "из", len(файлы), "шардов,", os.path.getsize(os.path.join(БАЗА,"данные","вект-записи.npy"))//1048576, "МБ")
+    return E.shape
 
 def векторный_поиск(текст, сколько=40):
     """Косинус по bge-m3 (по записям). Порог отсекает мусор."""
@@ -200,7 +229,7 @@ def векторный_поиск(текст, сколько=40):
     if "модель" not in _ВЕК:
         _ВЕК["модель"] = SentenceTransformer("BAAI/bge-m3", device="cpu")
         _ВЕК["модель"].max_seq_length = 256
-        _ВЕК["E"] = np.load(ВЕКТ_З)
+        _ВЕК["E"] = np.load(ВЕКТ_З).astype(np.float32)
         _ВЕК["ном"] = np.load(ВЕКТ_З.replace(".npy", "_ном.npy"))
     q = _ВЕК["модель"].encode([текст], normalize_embeddings=True, convert_to_numpy=True)[0]
     скор = _ВЕК["E"] @ q
@@ -354,6 +383,12 @@ if __name__ == "__main__":
             print("!!! ОШИБКА:", flush=True)
             traceback.print_exc()
             sys.exit(1)
+    elif что == "эмбеддинги":
+        ш = int(sys.argv[2]) if len(sys.argv) > 2 else 0
+        вс = int(sys.argv[3]) if len(sys.argv) > 3 else 1
+        эмбеддинги(ш, вс)
+    elif что == "склейка":
+        склеить_шарды()
     elif что == "search":
         print(json.dumps(искать(" ".join(sys.argv[2:]) or "поиск", 5), ensure_ascii=False, indent=1))
     elif что == "eval":
