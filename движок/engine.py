@@ -258,12 +258,29 @@ def вектор_запроса(текст):
     from transformers import AutoTokenizer
     м = os.environ.get("ВЕКТ_МОДЕЛЬ", os.path.join(БАЗА, "модели", "bge-m3-onnx"))
     if "сесс" not in _ВЕК:
-        _ВЕК["ток"] = AutoTokenizer.from_pretrained(м)
+        # На раннере GitHub tokenizer.json от Xenova не парсится («Couldn't instantiate the
+        # backend tokenizer»), поэтому есть фолбэк: sentencepiece напрямую + ручная сборка
+        # input_ids по схеме XLM-R (<s> … </s>), ровно как делает AutoTokenizer.
+        try:
+            _ВЕК["ток"] = AutoTokenizer.from_pretrained(м)
+            _ВЕК["режим"] = "auto"
+        except Exception as e:
+            print("авто-токенизатор не поднялся, беру sentencepiece:", repr(e)[:120], flush=True)
+            import sentencepiece as spm
+            _ВЕК["sp"] = spm.SentencePieceProcessor(model_file=os.path.join(м, "sentencepiece.bpe.model"))
+            _ВЕК["режим"] = "sp"
         о = ort.SessionOptions(); о.intra_op_num_threads = 4; о.inter_op_num_threads = 1
         _ВЕК["сесс"] = ort.InferenceSession(os.path.join(м, "model_int8.onnx"), sess_options=о,
                                            providers=["CPUExecutionProvider"])
-    enc = _ВЕК["ток"]([текст], padding=True, truncation=True, max_length=192, return_tensors="np")
-    вх = {k: enc[k].astype(np.int64) for k in ("input_ids", "attention_mask") if k in enc}
+    if _ВЕК.get("режим") == "sp":
+        sp = _ВЕК["sp"]
+        ид = sp.encode(текст, out_type=int)[:190]
+        ids = np.array([[0] + ид + [2]], dtype=np.int64)          # <s> … </s>
+        маска = np.ones_like(ids)
+        вх = {"input_ids": ids, "attention_mask": маска}
+    else:
+        enc = _ВЕК["ток"]([текст], padding=True, truncation=True, max_length=192, return_tensors="np")
+        вх = {k: enc[k].astype(np.int64) for k in ("input_ids", "attention_mask") if k in enc}
     скрыт = _ВЕК["сесс"].run(None, вх)[0]          # (1, L, 1024)
     v = скрыт[:, 0, :][0].astype(np.float32)        # CLS
     return v / (np.linalg.norm(v) + 1e-9)
