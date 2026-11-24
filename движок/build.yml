@@ -1,0 +1,105 @@
+name: memory-engine-build
+# Сборка поиска по памяти в облаке: 16 ГБ RAM, 4 CPU (ubuntu-latest).
+# Зачем облако: песочница агента 2 ГБ не тянет bge-m3 — тут тянет (1,6 ГБ RAM, 0 VRAM).
+on:
+  workflow_dispatch:
+    inputs:
+      шаг:
+        description: "build | eval | search"
+        required: false
+        default: "build"
+      запрос:
+        description: "текст запроса (для шаг=search)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+env:
+  PYTHONUTF8: "1"
+  LC_ALL: C.UTF-8
+  HF_HOME: ${{ github.workspace }}/.hf
+  TOKENIZERS_PARALLELISM: "false"
+
+jobs:
+  build:
+    name: "сборка индекса + эмбеддинги"
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Зависимости
+        run: |
+          pip install --quiet --upgrade pip
+          pip install --quiet sqlite-vec onnxruntime==1.19.2 transformers sentence-transformers pymorphy3 numpy
+          python -c "import sqlite3; c=sqlite3.connect(':memory:'); c.execute('CREATE VIRTUAL TABLE t USING fts5(x)'); print('FTS5 есть')"
+          free -m | head -2
+
+      - name: Скачать реранкер (376 МБ int8)
+        run: |
+          python - <<'PY'
+          from huggingface_hub import snapshot_download
+          snapshot_download("metalmon80/bge-reranker-v2-m3-en-ru-onnx", local_dir="модели/реранк",
+                            allow_patterns=["model.int8.onnx","tokenizer.json","config.json",
+                                            "tokenizer_config.json","special_tokens_map.json","vocab.txt","*.model"])
+          print("реранк скачан")
+          PY
+
+      - name: Сборка индекса и эмбеддингов
+        if: ${{ github.event.inputs.шаг != 'search' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python engine.py build
+          ls -la данные/ | head -20
+
+      - name: Замер MRR
+        if: ${{ github.event.inputs.шаг == 'eval' }}
+        run: python engine.py eval
+
+      - name: Поиск
+        if: ${{ github.event.inputs.шаг == 'search' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python engine.py build
+          python engine.py search "${{ github.event.inputs.запрос }}"
+
+      - name: Отдать результат
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: memory-engine-result
+          path: |
+            данные/поиск-индекс.db
+            данные/вект-индекс*.npy
+            *.json
+            *.md
+          retention-days: 14
+          if-no-files-found: warn
+
+  # Отдельная задача: упаковать результат в hranilishe (постоянное хранилище)
+  publish:
+    name: "выложить в hranilishe"
+    needs: build
+    if: ${{ success() }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: memory-engine-result
+          path: данные
+
+      - name: Залить компактную версию в hranilishe
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ls -la данные/ || true
+          du -sh данные/* 2>/dev/null || true
