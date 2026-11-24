@@ -169,13 +169,16 @@ def эмбеддинги():
         raise RuntimeError("нет записей")
     print("загружаю bge-m3...", flush=True)
     м = SentenceTransformer("BAAI/bge-m3", device="cpu")
+    м.max_seq_length = 512     # ограничение длины здесь, не в encode()
     print("модель ок, размерность:", м.get_sentence_embedding_dimension(), flush=True)
     тексты = [s[1] or "" for s in стр]
     части, B = [], 32
     t0 = time.time()
     for i in range(0, len(тексты), B):
+        # ВАЖНО: в sentence-transformers 5.x max_length в encode() не принимается —
+        # задаём через модель, иначе ValueError «additional keyword arguments».
         E = м.encode(тексты[i:i+B], batch_size=B, normalize_embeddings=True,
-                     convert_to_numpy=True, show_progress_bar=False, max_length=512)
+                     convert_to_numpy=True, show_progress_bar=False)
         части.append(E.astype(np.float32))
         if i % 320 == 0:
             print(f"  {i}/{len(тексты)} {time.time()-t0:.0f} с", flush=True)
@@ -196,6 +199,7 @@ def векторный_поиск(текст, сколько=40):
     from sentence_transformers import SentenceTransformer
     if "модель" not in _ВЕК:
         _ВЕК["модель"] = SentenceTransformer("BAAI/bge-m3", device="cpu")
+        _ВЕК["модель"].max_seq_length = 512
         _ВЕК["E"] = np.load(ВЕКТ_З)
         _ВЕК["ном"] = np.load(ВЕКТ_З.replace(".npy", "_ном.npy"))
     q = _ВЕК["модель"].encode([текст], normalize_embeddings=True, convert_to_numpy=True)[0]
