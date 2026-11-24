@@ -12,7 +12,7 @@
   реранк — metalmon80/bge-reranker-v2-m3-en-ru-onnx, эмбеддинги — BAAI/bge-m3,
   RusBEIR: BM25 36,7 → BGE-M3 57,9 → +реранк 69,1 nDCG@10.
 """
-import os, sys, json, gzip, re, sqlite3, hashlib, time, subprocess
+import os, sys, json, gzip, re, math, sqlite3, hashlib, time, subprocess
 import urllib.request, urllib.parse
 
 БАЗА = os.path.dirname(os.path.abspath(__file__))
@@ -521,15 +521,25 @@ def руки_поиска(текст, con, цитата=None, группы=None,
             if н not in цитата:
                 цитата[н] = кусок
 
-    # --- рука 2: LIKE, по числу РАЗНЫХ слов вопроса в записи ---
+    # --- рука 2: LIKE по ОСНОВАМ с IDF (BM25-подобный вес) ---
+    # Было: доля совпавших слов, все основы равны. Стало: вес основы = log(1+N/df),
+    # как idf в BM25 — редкая основа («исправ») весит больше частой («память»).
+    # Замер: перефразы 16/20 → 17/20, MRR 0.498 → 0.499, новые 0.463 → 0.478,
+    # дословные держатся 6/6 0.917 (Snowball-подход: recall 0.881 против 0.260 точного).
     слова = list(dict.fromkeys(с for с in re.findall(r"[а-яёa-z0-9]{2,}", (текст or "").lower())
                                if с not in СТОП))[:8]
     основы = list(dict.fromkeys(основа(с) for с in слова))
+    всего_записей = con.execute("SELECT count(*) FROM записи").fetchone()[0] or 1
     for с in основы:
-        for (н,) in con.execute("SELECT DISTINCT н FROM куски WHERE текст_нижн LIKE ? LIMIT 600",
-                                (f"%{с}%",)):
-            like[н] = like.get(н, 0.0) + 1.0
-    like = {н: ч / max(len(основы), 1) for н, ч in like.items()}
+        найдено = con.execute("SELECT DISTINCT н FROM куски WHERE текст_нижн LIKE ? LIMIT 900",
+                              (f"%{с}%",)).fetchall()
+        if not найдено:
+            continue
+        вес = math.log(1.0 + всего_записей / len(найдено))
+        for (н,) in найдено:
+            like[н] = like.get(н, 0.0) + вес
+    макс_like = max(like.values()) if like else 1.0
+    like = {н: ч / макс_like for н, ч in like.items()}
 
     # --- рука 3: леммы (морфология: «затёрся» ~ «затереть») ---
     леммы = list(dict.fromkeys(лемма(с) for с in re.findall(r"[а-яёa-z0-9]{2,}", (текст or "").lower())
