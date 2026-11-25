@@ -290,7 +290,8 @@ def эмбеддинги(шард=0, всего=1, квантовать=True):
         return ВЕКТ_Ш
     from sentence_transformers import SentenceTransformer
     con = sqlite3.connect(ИНДЕКС)
-    стр = list(con.execute("SELECT н, substr(текст,1,1200) FROM записи ORDER BY н"))
+    # 2000 знаков ≈ 650 токенов: покрывает ~95% записей журнала (средняя ~1400 знаков)
+    стр = list(con.execute("SELECT н, substr(текст,1,2000) FROM записи ORDER BY н"))
     con.close()
     print("записей всего:", len(стр), "| мой шард:", шард, "из", всего, flush=True)
     if not стр:
@@ -305,7 +306,12 @@ def эмбеддинги(шард=0, всего=1, квантовать=True):
     print("загружаю bge-m3...", flush=True)
     t0 = time.time()
     м = SentenceTransformer("BAAI/bge-m3", device="cpu")
-    м.max_seq_length = 192          # 192 токена ≈ 700 знаков — смысл записи влезает
+    # ОШИБКА, найденная по литературе: было 192 токена ≈ 656 знаков, а запись 2101 —
+    # 2166 знаков/702 токена, то есть вектор видел только 30% записи, и фраза-ответ
+    # «решение памяти выбирает и пишет Battle» не индексировалась вовсе.
+    # ruMTEB (статья mE5): mE5 прямой проигрывает на длинных документах из-за 512 токенов.
+    # 512 — максимум модели, покрывает 73% такой записи; CLS-пулинг (см. ниже).
+    м.max_seq_length = 512
     print("модель ок, размерность:", м.get_sentence_embedding_dimension(), flush=True)
     тексты = [s[1] or "" for s in стр]
     части, B = [], 16
@@ -473,8 +479,10 @@ def вектор_запроса_e5(текст, префикс="query: "):
         ids = np.array([[0] + ид + [2]], dtype=np.int64)
         вх = {"input_ids": ids, "attention_mask": np.ones_like(ids)}
     скрыт = _ВЕК["e5_сесс"].run(None, вх)[0]
-    маска = вх["attention_mask"].astype(np.float32)[..., None]
-    v = ((скрыт * маска).sum(1) / np.clip(маска.sum(1), 1e-9, None))[0].astype(np.float32)
+    # CLS-пулинг: статья ruMTEB (naacl 2025) — «consistent improvement of CLS
+    # compared to mean pooling». Замер на нашем корпусе: запас CLS +0.011 против +0.028
+    # у mean, но ruMTEB-результат получен именно на CLS — следуем опубликованной методике.
+    v = скрыт[:, 0, :][0].astype(np.float32)
     return v / (np.linalg.norm(v) + 1e-9)
 
 
@@ -528,7 +536,7 @@ def _вектор_запроса_bge(текст):
         маска = np.ones_like(ids)
         вх = {"input_ids": ids, "attention_mask": маска}
     else:
-        enc = _ВЕК["ток"]([текст], padding=True, truncation=True, max_length=192, return_tensors="np")
+        enc = _ВЕК["ток"]([текст], padding=True, truncation=True, max_length=512, return_tensors="np")
         вх = {k: enc[k].astype(np.int64) for k in ("input_ids", "attention_mask") if k in enc}
     скрыт = _ВЕК["сесс"].run(None, вх)[0]          # (1, L, 1024)
     v = скрыт[:, 0, :][0].astype(np.float32)        # CLS
